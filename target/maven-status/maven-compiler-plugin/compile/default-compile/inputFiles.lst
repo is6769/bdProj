@@ -1,0 +1,10 @@
+/home/is/My-Projects/bdProj/src/main/java/com/example/dbschemastudio/DbSchemaStudioFxApplication.java
+/home/is/My-Projects/bdProj/src/main/java/com/example/dbschemastudio/DbSchemaStudioSpringApp.java
+/home/is/My-Projects/bdProj/src/main/java/com/example/dbschemastudio/controller/ConnectionDialogController.java
+/home/is/My-Projects/bdProj/src/main/java/com/example/dbschemastudio/controller/MainViewController.java
+/home/is/My-Projects/bdProj/src/main/java/com/example/dbschemastudio/model/ColumnDefinition.java
+/home/is/My-Projects/bdProj/src/main/java/com/example/dbschemastudio/model/ColumnMetadata.java
+/home/is/My-Projects/bdProj/src/main/java/com/example/dbschemastudio/model/ConnectionSettings.java
+/home/is/My-Projects/bdProj/src/main/java/com/example/dbschemastudio/model/DataFilter.java
+/home/is/My-Projects/bdProj/src/main/java/com/example/dbschemastudio/service/DatabaseService.java
+/home/is/My-Projects/bdProj/src/main/java/com/example/dbschemastudio/service/SqlLogService.java

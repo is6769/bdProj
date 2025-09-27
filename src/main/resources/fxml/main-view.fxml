@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane xmlns="http://javafx.com/javafx/8" xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="com.example.dbschemastudio.controller.MainViewController">
+    <top>
+        <HBox spacing="12" alignment="CENTER_LEFT" BorderPane.alignment="CENTER">
+            <children>
+                <Label text="Connection:" />
+                <Label fx:id="connectionStatusLabel" text="Unknown" />
+                <Label fx:id="connectionDetailsLabel" text="" />
+                <Button text="Refresh" onAction="#handleRefreshConnection" />
+                <Label text="Transaction:" />
+                <Label fx:id="transactionStatusLabel" text="Inactive" />
+            </children>
+            <padding>
+                <Insets top="12" right="12" bottom="12" left="12" />
+            </padding>
+        </HBox>
+    </top>
+    <center>
+        <TabPane fx:id="mainTabPane">
+            <tabs>
+                <Tab text="Tables" closable="false">
+                    <content>
+                        <ScrollPane fitToWidth="true">
+                            <content>
+                                <VBox spacing="12">
+                                    <padding>
+                                        <Insets top="12" right="12" bottom="12" left="12" />
+                                    </padding>
+                                    <Label text="Create New Table" styleClass="section-title" />
+                                    <GridPane hgap="10" vgap="10">
+                                        <columnConstraints>
+                                            <ColumnConstraints minWidth="120" halignment="RIGHT" />
+                                            <ColumnConstraints hgrow="ALWAYS" />
+                                        </columnConstraints>
+                                        <children>
+                                            <Label text="Table Name:" GridPane.rowIndex="0" GridPane.columnIndex="0" />
+                                            <TextField fx:id="tableNameField" promptText="e.g. employee" GridPane.rowIndex="0" GridPane.columnIndex="1" />
+
+                                            <Label text="Columns (one per line)" GridPane.rowIndex="1" GridPane.columnIndex="0" />
+                                            <TextArea fx:id="columnDefinitionArea" 
+                                                      promptText="id SERIAL PRIMARY KEY&#10;name VARCHAR(100) NOT NULL" 
+                                                      prefRowCount="4"
+                                                      GridPane.rowIndex="1" GridPane.columnIndex="1" />
+                                        </children>
+                                    </GridPane>
+                                    <HBox spacing="10">
+                                        <Button text="Create Table" onAction="#handleCreateTable" />
+                                        <Button text="Load Tables" onAction="#handleRefreshTables" />
+                                    </HBox>
+                                    <Label text="Existing Tables" styleClass="section-title" />
+                                    <ListView fx:id="tableListView" prefHeight="200" />
+                                </VBox>
+                            </content>
+                        </ScrollPane>
+                    </content>
+                </Tab>
+                <Tab text="Data Viewer" closable="false">
+                    <content>
+                        <VBox spacing="12">
+                            <padding>
+                                <Insets top="12" right="12" bottom="12" left="12" />
+                            </padding>
+                            <HBox spacing="10">
+                                <Label text="Table:" />
+                                <ComboBox fx:id="dataTableSelector" prefWidth="200" onAction="#handleDataTableSelected" />
+                                <Button text="Reload" onAction="#handleReloadData" />
+                            </HBox>
+                            <HBox spacing="10" alignment="CENTER_LEFT">
+                                <Label text="Filter:" />
+                                <ComboBox fx:id="filterColumnCombo" promptText="Column" prefWidth="150" />
+                                <ComboBox fx:id="filterOperatorCombo" prefWidth="80" />
+                                <TextField fx:id="filterValueField" promptText="Value" />
+                                <Button text="Apply" onAction="#handleReloadData" />
+                                <Button text="Clear" onAction="#handleClearFilter" />
+                            </HBox>
+                            <TableView fx:id="dataTableView" prefHeight="320" />
+                        </VBox>
+                    </content>
+                </Tab>
+                <Tab text="Insert Data" closable="false">
+                    <content>
+                        <VBox spacing="12">
+                            <padding>
+                                <Insets top="12" right="12" bottom="12" left="12" />
+                            </padding>
+                            <HBox spacing="10">
+                                <Label text="Table:" />
+                                <ComboBox fx:id="insertTableSelector" prefWidth="200" onAction="#handleInsertTableSelected" />
+                                <Button text="Reset Fields" onAction="#handleResetInsertForm" />
+                            </HBox>
+                            <GridPane fx:id="insertFormGrid" hgap="10" vgap="10" />
+                            <HBox spacing="10" alignment="CENTER_LEFT">
+                                <CheckBox fx:id="useTransactionCheckBox" text="Use Transaction" />
+                                <Button fx:id="beginTransactionButton" text="Begin" onAction="#handleBeginTransaction" />
+                                <Button fx:id="commitTransactionButton" text="Commit" onAction="#handleCommitTransaction" />
+                                <Button fx:id="rollbackTransactionButton" text="Rollback" onAction="#handleRollbackTransaction" />
+                                <Button fx:id="insertRowButton" text="Insert Row" onAction="#handleInsertRow" />
+                            </HBox>
+                        </VBox>
+                    </content>
+                </Tab>
+            </tabs>
+        </TabPane>
+    </center>
+    <right>
+        <VBox spacing="8" prefWidth="260">
+            <padding>
+                <Insets top="12" right="12" bottom="12" left="12" />
+            </padding>
+            <Label text="SQL Log" styleClass="section-title" />
+            <ListView fx:id="sqlLogListView" VBox.vgrow="ALWAYS" styleClass="list-view sql-log-view" />
+        </VBox>
+    </right>
+    <bottom>
+        <HBox spacing="10" alignment="CENTER_LEFT">
+            <padding>
+                <Insets top="12" right="12" bottom="12" left="12" />
+            </padding>
+            <Label text="Status:" />
+            <Label fx:id="statusLabel" text="Ready" />
+        </HBox>
+    </bottom>
+</BorderPane>
