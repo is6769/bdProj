@@ -123,15 +123,23 @@ public class DatabaseService {
         executeUpdate(sql, new Object[]{});
     }
 
-    public List<Map<String, Object>> fetchData(String tableName, Optional<DataFilter> filter) {
+    public List<Map<String, Object>> fetchData(String tableName, List<DataFilter> filters) {
         validateIdentifier(tableName, "table");
         StringBuilder sql = new StringBuilder("SELECT * FROM " + quoteIdentifier(tableName));
         MapSqlParameterSource params = new MapSqlParameterSource();
-        filter.ifPresent(f -> {
-            sql.append(" WHERE ").append(quoteIdentifier(f.column())).append(" ").append(f.operator()).append(" :value");
-            params.addValue("value", normalizeValue(f.value(), Optional.empty()));
-        });
-        logService.logOperation(sql.toString());
+        List<DataFilter> activeFilters = filters == null ? List.of() : filters;
+        if (!activeFilters.isEmpty()) {
+            List<String> clauses = new ArrayList<>();
+            for (int i = 0; i < activeFilters.size(); i++) {
+                DataFilter filter = activeFilters.get(i);
+                String paramName = "value" + i;
+                clauses.add(quoteIdentifier(filter.column()) + " " + filter.operator() + " :" + paramName);
+                params.addValue(paramName, normalizeValue(filter.value(), Optional.of(filter.column())));
+            }
+            sql.append(" WHERE ").append(String.join(" AND ", clauses));
+        }
+        String logMessage = sql + (activeFilters.isEmpty() ? "" : " :: " + params.getValues());
+        logService.logOperation(logMessage);
         try {
             return namedTemplate.queryForList(sql.toString(), params);
         } catch (Exception ex) {

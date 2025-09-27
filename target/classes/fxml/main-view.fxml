@@ -70,14 +70,16 @@
                                 <ComboBox fx:id="dataTableSelector" prefWidth="200" onAction="#handleDataTableSelected" />
                                 <Button text="Reload" onAction="#handleReloadData" />
                             </HBox>
-                            <HBox spacing="10" alignment="CENTER_LEFT">
-                                <Label text="Filter:" />
-                                <ComboBox fx:id="filterColumnCombo" promptText="Column" prefWidth="150" />
-                                <ComboBox fx:id="filterOperatorCombo" prefWidth="80" />
-                                <TextField fx:id="filterValueField" promptText="Value" />
-                                <Button text="Apply" onAction="#handleReloadData" />
-                                <Button text="Clear" onAction="#handleClearFilter" />
-                            </HBox>
+                            <VBox spacing="6">
+                                <HBox spacing="10" alignment="CENTER_LEFT">
+                                    <Label text="Filters:" />
+                                    <Button text="Add Filter" onAction="#handleAddFilter" />
+                                    <Button text="Clear" onAction="#handleClearFilter" />
+                                    <Region HBox.hgrow="ALWAYS" />
+                                    <Button text="Apply" onAction="#handleReloadData" />
+                                </HBox>
+                                <VBox fx:id="filterRowsContainer" spacing="4" />
+                            </VBox>
                             <TableView fx:id="dataTableView" prefHeight="320" />
                         </VBox>
                     </content>

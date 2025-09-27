@@ -107,6 +107,7 @@ public class DbSchemaStudioFxApplication extends Application {
         props.put("spring.datasource.url", buildJdbcUrl(settings));
         props.put("spring.datasource.username", settings.username());
         props.put("spring.datasource.password", settings.password());
+    props.put("spring.datasource.driver-class-name", "org.postgresql.Driver");
         props.put("spring.datasource.hikari.schema", settings.schema());
         props.put("spring.jpa.properties.hibernate.default_schema", settings.schema());
         props.put("spring.datasource.hikari.maximumPoolSize", "5");

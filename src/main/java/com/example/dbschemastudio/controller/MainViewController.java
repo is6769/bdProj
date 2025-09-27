@@ -12,8 +12,11 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.control.*;
 import javafx.scene.layout.GridPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.VBox;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
@@ -49,11 +52,7 @@ public class MainViewController {
     @FXML
     private ComboBox<String> dataTableSelector;
     @FXML
-    private ComboBox<String> filterColumnCombo;
-    @FXML
-    private ComboBox<String> filterOperatorCombo;
-    @FXML
-    private TextField filterValueField;
+    private VBox filterRowsContainer;
     @FXML
     private TableView<Map<String, Object>> dataTableView;
     @FXML
@@ -74,6 +73,8 @@ public class MainViewController {
     private ListView<String> sqlLogListView;
 
     private final ObservableList<String> tables = FXCollections.observableArrayList();
+    private final List<FilterRow> filterRows = new ArrayList<>();
+    private List<String> availableFilterColumns = List.of();
     private final Map<String, TextField> insertFieldMap = new LinkedHashMap<>();
     private List<ColumnMetadata> insertColumnMetadata = List.of();
     public MainViewController(DatabaseService databaseService,
@@ -97,12 +98,10 @@ public class MainViewController {
     @FXML
     public void initialize() {
         sqlLogListView.setItems(logService.getEntries());
-        filterOperatorCombo.setItems(FXCollections.observableArrayList(OPERATORS));
-        filterOperatorCombo.getSelectionModel().selectFirst();
-
         tableListView.setItems(tables);
         dataTableSelector.setItems(tables);
         insertTableSelector.setItems(tables);
+        initializeFilterRows();
 
     if (connectionDetailsLabel != null) {
         connectionDetailsLabel.setText(String.format("(%s:%d/%s — schema %s)",
@@ -122,6 +121,11 @@ public class MainViewController {
         updateTransactionStatus();
         handleRefreshConnection();
         handleRefreshTables();
+    }
+
+    @FXML
+    public void handleAddFilter() {
+        addFilterRow(true);
     }
 
     @FXML
@@ -209,10 +213,8 @@ public class MainViewController {
         }
         runAsyncWithErrors("Loading columns", () -> databaseService.describeTable(table), columns -> {
             List<String> columnNames = columns.stream().map(ColumnMetadata::name).toList();
-            filterColumnCombo.setItems(FXCollections.observableArrayList(columnNames));
-            if (!columnNames.isEmpty()) {
-                filterColumnCombo.getSelectionModel().selectFirst();
-            }
+            availableFilterColumns = columnNames;
+            resetFilters();
             handleReloadData();
         });
     }
@@ -224,8 +226,14 @@ public class MainViewController {
             showError("Select a table to load data");
             return;
         }
-        Optional<DataFilter> filter = buildFilter();
-        runAsyncWithErrors("Fetching data", () -> databaseService.fetchData(table, filter), data -> {
+        List<DataFilter> filters;
+        try {
+            filters = buildFilters();
+        } catch (IllegalArgumentException ex) {
+            showError(ex.getMessage());
+            return;
+        }
+        runAsyncWithErrors("Fetching data", () -> databaseService.fetchData(table, filters), data -> {
             populateTable(data);
             setStatus("Loaded " + data.size() + " row(s)");
         });
@@ -233,9 +241,7 @@ public class MainViewController {
 
     @FXML
     public void handleClearFilter() {
-        filterColumnCombo.getSelectionModel().clearSelection();
-        filterValueField.clear();
-        filterOperatorCombo.getSelectionModel().selectFirst();
+        resetFilters();
         if (dataTableSelector.getValue() != null) {
             handleReloadData();
         }
@@ -318,18 +324,95 @@ public class MainViewController {
         }
     }
 
-    private Optional<DataFilter> buildFilter() {
-        String column = filterColumnCombo.getValue();
-        String operator = filterOperatorCombo.getValue();
-        String value = filterValueField.getText();
-        if (column == null || value == null || value.isBlank()) {
-            return Optional.empty();
+    private List<DataFilter> buildFilters() {
+        List<DataFilter> filters = new ArrayList<>();
+        for (FilterRow row : filterRows) {
+            String column = row.columnCombo.getValue();
+            String operator = row.operatorCombo.getValue();
+            String value = row.valueField.getText();
+            boolean hasColumn = column != null && !column.isBlank();
+            boolean hasValue = value != null && !value.isBlank();
+            if (!hasColumn && !hasValue) {
+                continue;
+            }
+            if (!hasColumn) {
+                throw new IllegalArgumentException("Select a column for each filter with a value.");
+            }
+            if (!hasValue) {
+                throw new IllegalArgumentException("Provide a value for filter on column '" + column + "'.");
+            }
+            filters.add(new DataFilter(column, operator, value));
         }
-        try {
-            return Optional.of(new DataFilter(column, operator, value));
-        } catch (IllegalArgumentException ex) {
-            showError(ex.getMessage());
-            return Optional.empty();
+        return filters;
+    }
+
+    private void initializeFilterRows() {
+        if (filterRowsContainer == null) {
+            return;
+        }
+        resetFilters();
+    }
+
+    private FilterRow addFilterRow(boolean focusValue) {
+        ComboBox<String> columnCombo = new ComboBox<>();
+        columnCombo.setPrefWidth(150);
+        columnCombo.setPromptText("Column");
+
+        ComboBox<String> operatorCombo = new ComboBox<>();
+        operatorCombo.setPrefWidth(80);
+        operatorCombo.setItems(FXCollections.observableArrayList(OPERATORS));
+        operatorCombo.getSelectionModel().selectFirst();
+
+        TextField valueField = new TextField();
+        valueField.setPromptText("Value");
+
+        Button removeButton = new Button("Remove");
+
+        HBox rowContainer = new HBox(10, columnCombo, operatorCombo, valueField, removeButton);
+        rowContainer.setAlignment(Pos.CENTER_LEFT);
+
+        FilterRow row = new FilterRow(rowContainer, columnCombo, operatorCombo, valueField, removeButton);
+        removeButton.setOnAction(event -> removeFilterRow(row));
+
+        filterRows.add(row);
+        filterRowsContainer.getChildren().add(rowContainer);
+        row.setAvailableColumns(availableFilterColumns);
+        updateFilterRowState();
+
+        if (focusValue) {
+            Platform.runLater(valueField::requestFocus);
+        }
+        return row;
+    }
+
+    private void removeFilterRow(FilterRow row) {
+        if (filterRows.size() <= 1) {
+            row.clear();
+            return;
+        }
+        filterRows.remove(row);
+        filterRowsContainer.getChildren().remove(row.container);
+        updateFilterRowState();
+    }
+
+    private void resetFilters() {
+        filterRowsContainer.getChildren().clear();
+        filterRows.clear();
+        FilterRow row = addFilterRow(false);
+        row.clear();
+        syncFilterRowColumns();
+    }
+
+    private void updateFilterRowState() {
+        boolean disableRemove = filterRows.size() <= 1;
+        for (FilterRow row : filterRows) {
+            row.removeButton.setDisable(disableRemove);
+        }
+    }
+
+    private void syncFilterRowColumns() {
+        for (FilterRow row : filterRows) {
+            row.setAvailableColumns(availableFilterColumns);
         }
     }
 
@@ -472,6 +555,42 @@ public class MainViewController {
         updateTransactionStatus();
         if (table != null) {
             handleReloadData();
+        }
+    }
+
+    private static class FilterRow {
+        private final HBox container;
+        private final ComboBox<String> columnCombo;
+        private final ComboBox<String> operatorCombo;
+        private final TextField valueField;
+        private final Button removeButton;
+
+        private FilterRow(HBox container,
+                           ComboBox<String> columnCombo,
+                           ComboBox<String> operatorCombo,
+                           TextField valueField,
+                           Button removeButton) {
+            this.container = container;
+            this.columnCombo = columnCombo;
+            this.operatorCombo = operatorCombo;
+            this.valueField = valueField;
+            this.removeButton = removeButton;
+        }
+
+        private void setAvailableColumns(List<String> columns) {
+            String previous = columnCombo.getValue();
+            columnCombo.setItems(FXCollections.observableArrayList(columns));
+            if (previous != null && columns.contains(previous)) {
+                columnCombo.setValue(previous);
+            } else {
+                columnCombo.getSelectionModel().clearSelection();
+            }
+        }
+
+        private void clear() {
+            columnCombo.getSelectionModel().clearSelection();
+            operatorCombo.getSelectionModel().selectFirst();
+            valueField.clear();
         }
     }
 }
