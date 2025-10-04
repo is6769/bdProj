@@ -29,6 +29,14 @@ import jakarta.annotation.PreDestroy;
 public class MainViewController {
 
     private static final List<String> OPERATORS = List.of("=", "!=", ">", "<", ">=", "<=", "LIKE", "ILIKE");
+    private static final List<String> COMMON_TYPES = List.of(
+        "SERIAL", "BIGSERIAL", "INTEGER", "BIGINT", "SMALLINT",
+        "VARCHAR", "TEXT", "CHAR",
+        "BOOLEAN",
+        "NUMERIC", "DECIMAL", "REAL", "DOUBLE PRECISION",
+        "DATE", "TIME", "TIMESTAMP", "TIMESTAMPTZ",
+        "UUID", "JSON", "JSONB"
+    );
 
     private final DatabaseService databaseService;
     private final SqlLogService logService;
@@ -49,6 +57,14 @@ public class MainViewController {
     private TextField tableNameField;
     @FXML
     private TextArea columnDefinitionArea;
+    @FXML
+    private TextField enumNameField;
+    @FXML
+    private TextField enumValuesField;
+    @FXML
+    private ListView<String> enumListView;
+    @FXML
+    private VBox columnRowsContainer;
     @FXML
     private ComboBox<String> dataTableSelector;
     @FXML
@@ -73,8 +89,11 @@ public class MainViewController {
     private ListView<String> sqlLogListView;
 
     private final ObservableList<String> tables = FXCollections.observableArrayList();
+    private final ObservableList<String> enums = FXCollections.observableArrayList();
     private final List<FilterRow> filterRows = new ArrayList<>();
+    private final List<ColumnRow> columnRows = new ArrayList<>();
     private List<String> availableFilterColumns = List.of();
+    private List<String> availableTypes = new ArrayList<>(COMMON_TYPES);
     private final Map<String, TextField> insertFieldMap = new LinkedHashMap<>();
     private List<ColumnMetadata> insertColumnMetadata = List.of();
     public MainViewController(DatabaseService databaseService,
@@ -99,9 +118,11 @@ public class MainViewController {
     public void initialize() {
         sqlLogListView.setItems(logService.getEntries());
         tableListView.setItems(tables);
+        enumListView.setItems(enums);
         dataTableSelector.setItems(tables);
         insertTableSelector.setItems(tables);
         initializeFilterRows();
+        initializeColumnRows();
 
     if (connectionDetailsLabel != null) {
         connectionDetailsLabel.setText(String.format("(%s:%d/%s — schema %s)",
@@ -117,10 +138,20 @@ public class MainViewController {
                 insertTableSelector.getSelectionModel().select(newValue);
             }
         });
+        
+        enumListView.setOnMouseClicked(event -> {
+            if (event.getClickCount() == 2) {
+                String selected = enumListView.getSelectionModel().getSelectedItem();
+                if (selected != null) {
+                    showEnumValues(selected);
+                }
+            }
+        });
 
         updateTransactionStatus();
         handleRefreshConnection();
         handleRefreshTables();
+        handleRefreshEnums();
     }
 
     @FXML
@@ -185,24 +216,74 @@ public class MainViewController {
     @FXML
     public void handleCreateTable() {
         String tableName = Optional.ofNullable(tableNameField.getText()).map(String::trim).orElse("");
-        String columnText = Optional.ofNullable(columnDefinitionArea.getText()).orElse("");
-        if (tableName.isBlank() || columnText.isBlank()) {
-            showError("Please provide a table name and at least one column definition.");
+        if (tableName.isBlank()) {
+            showError("Please provide a table name.");
             return;
         }
         List<ColumnDefinition> definitions;
         try {
-            definitions = parseColumnDefinitions(columnText);
+            definitions = buildColumnDefinitions();
         } catch (IllegalArgumentException ex) {
             showError(ex.getMessage());
             return;
         }
+        if (definitions.isEmpty()) {
+            showError("Please add at least one column.");
+            return;
+        }
         runAsyncVoid("Creating table", () -> databaseService.createTable(tableName, definitions), () -> {
-            setStatus("Table " + tableName + " created (if not existing)");
-            tableNameField.clear();
-            columnDefinitionArea.clear();
+            setStatus("Table " + tableName + " created successfully");
+            handleClearTableForm();
             handleRefreshTables();
         });
+    }
+
+    @FXML
+    public void handleCreateEnum() {
+        String enumName = Optional.ofNullable(enumNameField.getText()).map(String::trim).orElse("");
+        String valuesText = Optional.ofNullable(enumValuesField.getText()).map(String::trim).orElse("");
+        if (enumName.isBlank() || valuesText.isBlank()) {
+            showError("Please provide enum name and values.");
+            return;
+        }
+        List<String> values = Arrays.stream(valuesText.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
+        if (values.isEmpty()) {
+            showError("Please provide at least one enum value.");
+            return;
+        }
+        runAsyncVoid("Creating enum", () -> databaseService.createEnum(enumName, values), () -> {
+            setStatus("Enum type " + enumName + " created successfully");
+            enumNameField.clear();
+            enumValuesField.clear();
+            handleRefreshEnums();
+        });
+    }
+
+    @FXML
+    public void handleRefreshEnums() {
+        runAsyncWithErrors("Loading enums", () -> databaseService.listEnums(), loadedEnums -> {
+            enums.setAll(loadedEnums);
+            availableTypes = new ArrayList<>(COMMON_TYPES);
+            availableTypes.addAll(loadedEnums);
+            syncColumnRowTypes();
+            setStatus("Loaded " + loadedEnums.size() + " enum type(s)");
+        });
+    }
+
+    @FXML
+    public void handleAddColumn() {
+        addColumnRow();
+    }
+
+    @FXML
+    public void handleClearTableForm() {
+        tableNameField.clear();
+        columnRowsContainer.getChildren().clear();
+        columnRows.clear();
+        addColumnRow();
     }
 
     @FXML
@@ -462,6 +543,107 @@ public class MainViewController {
         }
     }
 
+    private void initializeColumnRows() {
+        if (columnRowsContainer == null) {
+            return;
+        }
+        columnRowsContainer.getChildren().clear();
+        columnRows.clear();
+        addColumnRow();
+    }
+
+    private void addColumnRow() {
+        TextField nameField = new TextField();
+        nameField.setPromptText("Column name");
+        nameField.setPrefWidth(150);
+
+        ComboBox<String> typeCombo = new ComboBox<>();
+        typeCombo.setPrefWidth(150);
+        typeCombo.setEditable(true);
+        typeCombo.setPromptText("Type");
+        typeCombo.setItems(FXCollections.observableArrayList(availableTypes));
+
+        TextField constraintsField = new TextField();
+        constraintsField.setPromptText("Constraints (e.g. NOT NULL, PRIMARY KEY)");
+        constraintsField.setPrefWidth(250);
+
+        Button removeButton = new Button("Remove");
+        
+        HBox rowContainer = new HBox(10, nameField, typeCombo, constraintsField, removeButton);
+        rowContainer.setAlignment(Pos.CENTER_LEFT);
+
+        ColumnRow row = new ColumnRow(rowContainer, nameField, typeCombo, constraintsField, removeButton);
+        removeButton.setOnAction(event -> removeColumnRow(row));
+
+        columnRows.add(row);
+        columnRowsContainer.getChildren().add(rowContainer);
+        updateColumnRowState();
+    }
+
+    private void removeColumnRow(ColumnRow row) {
+        if (columnRows.size() <= 1) {
+            row.clear();
+            return;
+        }
+        columnRows.remove(row);
+        columnRowsContainer.getChildren().remove(row.container);
+        updateColumnRowState();
+    }
+
+    private void updateColumnRowState() {
+        boolean disableRemove = columnRows.size() <= 1;
+        for (ColumnRow row : columnRows) {
+            row.removeButton.setDisable(disableRemove);
+        }
+    }
+
+    private void syncColumnRowTypes() {
+        for (ColumnRow row : columnRows) {
+            row.setAvailableTypes(availableTypes);
+        }
+    }
+
+    private List<ColumnDefinition> buildColumnDefinitions() {
+        List<ColumnDefinition> definitions = new ArrayList<>();
+        for (ColumnRow row : columnRows) {
+            String name = row.nameField.getText();
+            String type = row.typeCombo.getValue();
+            String constraints = row.constraintsField.getText();
+            
+            boolean hasName = name != null && !name.isBlank();
+            boolean hasType = type != null && !type.isBlank();
+            
+            if (!hasName && !hasType) {
+                continue;
+            }
+            if (!hasName) {
+                throw new IllegalArgumentException("Column name is required for all columns.");
+            }
+            if (!hasType) {
+                throw new IllegalArgumentException("Type is required for column '" + name + "'.");
+            }
+            
+            String typeClause = type.trim();
+            if (constraints != null && !constraints.isBlank()) {
+                typeClause += " " + constraints.trim();
+            }
+            
+            definitions.add(new ColumnDefinition(name.trim(), typeClause));
+        }
+        return definitions;
+    }
+
+    private void showEnumValues(String enumName) {
+        runAsyncWithErrors("Loading enum values", () -> databaseService.getEnumValues(enumName), values -> {
+            String valuesText = String.join(", ", values);
+            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+            alert.setTitle("ENUM Values");
+            alert.setHeaderText("Values for enum type: " + enumName);
+            alert.setContentText(valuesText);
+            alert.showAndWait();
+        });
+    }
+
     private List<ColumnDefinition> parseColumnDefinitions(String text) {
         String[] lines = text.split("\r?\n");
         List<ColumnDefinition> definitions = new ArrayList<>();
@@ -591,6 +773,42 @@ public class MainViewController {
             columnCombo.getSelectionModel().clearSelection();
             operatorCombo.getSelectionModel().selectFirst();
             valueField.clear();
+        }
+    }
+
+    private static class ColumnRow {
+        private final HBox container;
+        private final TextField nameField;
+        private final ComboBox<String> typeCombo;
+        private final TextField constraintsField;
+        private final Button removeButton;
+
+        private ColumnRow(HBox container,
+                          TextField nameField,
+                          ComboBox<String> typeCombo,
+                          TextField constraintsField,
+                          Button removeButton) {
+            this.container = container;
+            this.nameField = nameField;
+            this.typeCombo = typeCombo;
+            this.constraintsField = constraintsField;
+            this.removeButton = removeButton;
+        }
+
+        private void setAvailableTypes(List<String> types) {
+            String previous = typeCombo.getValue();
+            typeCombo.setItems(FXCollections.observableArrayList(types));
+            if (previous != null && types.contains(previous)) {
+                typeCombo.setValue(previous);
+            } else {
+                typeCombo.getSelectionModel().clearSelection();
+            }
+        }
+
+        private void clear() {
+            nameField.clear();
+            typeCombo.getSelectionModel().clearSelection();
+            constraintsField.clear();
         }
     }
 }

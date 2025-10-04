@@ -5,7 +5,8 @@ A desktop client built with JavaFX and Spring Boot for inspecting and editing Po
 ## Features
 
 - **Connection status panel** – one-click connectivity health check with friendly feedback.
-- **Table manager** – create new tables via structured column definitions and browse existing tables.
+- **ENUM type management** – create custom PostgreSQL ENUM types with comma-separated values and view existing types.
+- **Table manager** – create new tables via a visual column editor with type selection, constraints, and ENUM support; browse existing tables.
 - **Data viewer** – dynamically renders table contents with ad-hoc filters, lets you stack multiple conditions (combined with AND), and supports common comparison operators.
 - **Data entry** – generate insert forms per table, enforce required columns, and submit rows instantly or within a long-running transaction.
 - **Transaction controls** – begin, commit, or rollback transactions and reuse them across multiple operations.
@@ -50,7 +51,8 @@ This starts a container named `dbschema-postgres` on port `5432` with credential
 ## Usage Tips
 
 - The application now opens with a dedicated connection window before the workspace loads. Enter the PostgreSQL host, port, database, credentials, and default schema there. The form is pre-filled with the Docker Compose defaults (`localhost:5432`, database `dbschemastudio`, user `dbstudio`, password `dbstudio`). Use **Test Connection** to validate the settings; the **Connect** button only enables after a successful check. Choose **Remember for session** to preload the same values next time during the same app run. When connecting to the bundled Docker Compose database, SSL is automatically disabled to avoid EOF/handshake errors; provide your own SSL parameters if targeting a secure instance.
-- Use the **Tables** tab to create new tables. Provide column definitions line-by-line using standard SQL fragments (e.g. `id SERIAL PRIMARY KEY`).
+- Use the **ENUM Types** section to create custom PostgreSQL ENUM types. Enter a name and comma-separated values (e.g., `pending,active,done`), then click **Create ENUM**. Double-click any enum in the list to view its values. These ENUMs become available in the type dropdown when creating tables.
+- Use the **Tables** tab to create new tables with the visual column editor. Click **Add Column** to add rows specifying name, type (with auto-complete for common types and ENUMs), and optional constraints like `NOT NULL` or `PRIMARY KEY`. Click **Create Table** when done, or **Clear** to reset the form.
 - Switch to **Data Viewer** to inspect table contents. Use **Add Filter** to stack multiple conditions (combined with AND); choose a column, operator, and value for each clause, then press **Apply**.
 - In **Insert Data**, choose a table to auto-generate an input form. Mark *Use Transaction* to stage multiple inserts and rely on **Commit** / **Rollback** controls.
 - The **SQL Log** pane reflects every executed SQL statement along with parameter bindings and runtime errors.

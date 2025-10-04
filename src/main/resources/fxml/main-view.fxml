@@ -27,33 +27,55 @@
                     <content>
                         <ScrollPane fitToWidth="true">
                             <content>
-                                <VBox spacing="12">
+                                <VBox spacing="16">
                                     <padding>
                                         <Insets top="12" right="12" bottom="12" left="12" />
                                     </padding>
-                                    <Label text="Create New Table" styleClass="section-title" />
-                                    <GridPane hgap="10" vgap="10">
-                                        <columnConstraints>
-                                            <ColumnConstraints minWidth="120" halignment="RIGHT" />
-                                            <ColumnConstraints hgrow="ALWAYS" />
-                                        </columnConstraints>
-                                        <children>
-                                            <Label text="Table Name:" GridPane.rowIndex="0" GridPane.columnIndex="0" />
-                                            <TextField fx:id="tableNameField" promptText="e.g. employee" GridPane.rowIndex="0" GridPane.columnIndex="1" />
-
-                                            <Label text="Columns (one per line)" GridPane.rowIndex="1" GridPane.columnIndex="0" />
-                                            <TextArea fx:id="columnDefinitionArea" 
-                                                      promptText="id SERIAL PRIMARY KEY&#10;name VARCHAR(100) NOT NULL" 
-                                                      prefRowCount="4"
-                                                      GridPane.rowIndex="1" GridPane.columnIndex="1" />
-                                        </children>
-                                    </GridPane>
-                                    <HBox spacing="10">
-                                        <Button text="Create Table" onAction="#handleCreateTable" />
-                                        <Button text="Load Tables" onAction="#handleRefreshTables" />
-                                    </HBox>
-                                    <Label text="Existing Tables" styleClass="section-title" />
-                                    <ListView fx:id="tableListView" prefHeight="200" />
+                                    
+                                    <!-- ENUM Type Management Section -->
+                                    <VBox spacing="8">
+                                        <Label text="ENUM Types" styleClass="section-title" />
+                                        <HBox spacing="10" alignment="CENTER_LEFT">
+                                            <TextField fx:id="enumNameField" promptText="Enum name (e.g. status_type)" prefWidth="200" />
+                                            <TextField fx:id="enumValuesField" promptText="Values (comma-separated: pending,active,done)" HBox.hgrow="ALWAYS" />
+                                            <Button text="Create ENUM" onAction="#handleCreateEnum" />
+                                            <Button text="Refresh" onAction="#handleRefreshEnums" />
+                                        </HBox>
+                                        <ListView fx:id="enumListView" prefHeight="80" />
+                                    </VBox>
+                                    
+                                    <Separator />
+                                    
+                                    <!-- Table Creation Section -->
+                                    <VBox spacing="8">
+                                        <Label text="Create New Table" styleClass="section-title" />
+                                        <HBox spacing="10" alignment="CENTER_LEFT">
+                                            <Label text="Table Name:" />
+                                            <TextField fx:id="tableNameField" promptText="e.g. employees" prefWidth="200" />
+                                            <Region HBox.hgrow="ALWAYS" />
+                                            <Button text="Add Column" onAction="#handleAddColumn" />
+                                            <Button text="Clear" onAction="#handleClearTableForm" />
+                                        </HBox>
+                                        
+                                        <!-- Column Definition Grid -->
+                                        <VBox fx:id="columnRowsContainer" spacing="4" />
+                                        
+                                        <HBox spacing="10">
+                                            <Button text="Create Table" onAction="#handleCreateTable" />
+                                        </HBox>
+                                    </VBox>
+                                    
+                                    <Separator />
+                                    
+                                    <!-- Existing Tables Section -->
+                                    <VBox spacing="8">
+                                        <HBox spacing="10" alignment="CENTER_LEFT">
+                                            <Label text="Existing Tables" styleClass="section-title" />
+                                            <Region HBox.hgrow="ALWAYS" />
+                                            <Button text="Refresh Tables" onAction="#handleRefreshTables" />
+                                        </HBox>
+                                        <ListView fx:id="tableListView" prefHeight="150" />
+                                    </VBox>
                                 </VBox>
                             </content>
                         </ScrollPane>

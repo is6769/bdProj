@@ -110,6 +110,51 @@ public class DatabaseService {
         }
     }
 
+    public void createEnum(String enumName, List<String> values) {
+        validateIdentifier(enumName, "enum type");
+        if (values == null || values.isEmpty()) {
+            throw new IllegalArgumentException("At least one enum value is required");
+        }
+        for (String value : values) {
+            if (value == null || value.isBlank()) {
+                throw new IllegalArgumentException("Enum values must not be blank");
+            }
+        }
+        String valuesList = values.stream()
+                .map(v -> "'" + v.replace("'", "''") + "'")
+                .reduce((a, b) -> a + ", " + b)
+                .orElseThrow();
+        String sql = "CREATE TYPE " + quoteIdentifier(enumName) + " AS ENUM (" + valuesList + ")";
+        executeUpdate(sql, new Object[]{});
+    }
+
+    public List<String> listEnums() {
+        String sql = "SELECT t.typname FROM pg_type t " +
+                     "JOIN pg_namespace n ON t.typnamespace = n.oid " +
+                     "WHERE t.typtype = 'e' AND n.nspname = current_schema() " +
+                     "ORDER BY t.typname";
+        try {
+            return jdbcTemplate.queryForList(sql, String.class);
+        } catch (Exception ex) {
+            logService.logError("<metadata:listEnums>", ex.getMessage());
+            throw new RuntimeException("Unable to list enum types", ex);
+        }
+    }
+
+    public List<String> getEnumValues(String enumName) {
+        validateIdentifier(enumName, "enum type");
+        String sql = "SELECT e.enumlabel FROM pg_enum e " +
+                     "JOIN pg_type t ON e.enumtypid = t.oid " +
+                     "WHERE t.typname = ? " +
+                     "ORDER BY e.enumsortorder";
+        try {
+            return jdbcTemplate.queryForList(sql, String.class, enumName);
+        } catch (Exception ex) {
+            logService.logError("<metadata:getEnumValues>", ex.getMessage());
+            throw new RuntimeException("Unable to get enum values for " + enumName, ex);
+        }
+    }
+
     public void createTable(String tableName, List<ColumnDefinition> columns) {
         validateIdentifier(tableName, "table");
         if (columns == null || columns.isEmpty()) {
