@@ -125,14 +125,25 @@
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
                     <mainClass>com.example.dbschemastudio.DbSchemaStudioSpringApp</mainClass>
+                    <layout>ZIP</layout>
                 </configuration>
             </plugin>
             <plugin>
                 <groupId>org.openjfx</groupId>
                 <artifactId>javafx-maven-plugin</artifactId>
-                <version>${javafx.version}</version>
+                <version>0.0.8</version>
+                <executions>
+                    <execution>
+                        <id>default-cli</id>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                        <configuration>
+                            <mainClass>com.example.dbschemastudio.DbSchemaStudioSpringApp</mainClass>
+                        </configuration>
+                    </execution>
+                </executions>
                 <configuration>
-                    <executable>java</executable>
                     <mainClass>com.example.dbschemastudio.DbSchemaStudioSpringApp</mainClass>
                 </configuration>
             </plugin>

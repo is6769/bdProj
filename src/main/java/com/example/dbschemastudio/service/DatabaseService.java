@@ -193,6 +193,93 @@ public class DatabaseService {
         }
     }
 
+    public List<Map<String, Object>> fetchDataAdvanced(String tableName, 
+                                                        List<String> selectColumns,
+                                                        List<DataFilter> filters,
+                                                        List<String> orderByColumns,
+                                                        List<String> orderDirections,
+                                                        List<String> groupByColumns,
+                                                        List<String> aggregates,
+                                                        String havingClause) {
+        validateIdentifier(tableName, "table");
+        
+        // Build SELECT clause
+        StringBuilder sql = new StringBuilder("SELECT ");
+        if (selectColumns == null || selectColumns.isEmpty()) {
+            sql.append("*");
+        } else {
+            List<String> quoted = selectColumns.stream()
+                .map(col -> {
+                    // Handle aggregate functions or aliases (don't quote those)
+                    if (col.contains("(") || col.contains(" AS ")) {
+                        return col;
+                    }
+                    return quoteIdentifier(col);
+                })
+                .toList();
+            sql.append(String.join(", ", quoted));
+        }
+        
+        // Add aggregates if present
+        if (aggregates != null && !aggregates.isEmpty()) {
+            if (selectColumns != null && !selectColumns.isEmpty()) {
+                sql.append(", ");
+            }
+            sql.append(String.join(", ", aggregates));
+        }
+        
+        sql.append(" FROM ").append(quoteIdentifier(tableName));
+        
+        // Build WHERE clause
+        MapSqlParameterSource params = new MapSqlParameterSource();
+        List<DataFilter> activeFilters = filters == null ? List.of() : filters;
+        if (!activeFilters.isEmpty()) {
+            List<String> clauses = new ArrayList<>();
+            for (int i = 0; i < activeFilters.size(); i++) {
+                DataFilter filter = activeFilters.get(i);
+                String paramName = "value" + i;
+                clauses.add(quoteIdentifier(filter.column()) + " " + filter.operator() + " :" + paramName);
+                params.addValue(paramName, normalizeValue(filter.value(), Optional.of(filter.column())));
+            }
+            sql.append(" WHERE ").append(String.join(" AND ", clauses));
+        }
+        
+        // Build GROUP BY clause
+        if (groupByColumns != null && !groupByColumns.isEmpty()) {
+            sql.append(" GROUP BY ");
+            List<String> quoted = groupByColumns.stream().map(this::quoteIdentifier).toList();
+            sql.append(String.join(", ", quoted));
+        }
+        
+        // Build HAVING clause
+        if (havingClause != null && !havingClause.isBlank()) {
+            sql.append(" HAVING ").append(havingClause);
+        }
+        
+        // Build ORDER BY clause
+        if (orderByColumns != null && !orderByColumns.isEmpty()) {
+            sql.append(" ORDER BY ");
+            List<String> orderClauses = new ArrayList<>();
+            for (int i = 0; i < orderByColumns.size(); i++) {
+                String column = quoteIdentifier(orderByColumns.get(i));
+                String direction = (orderDirections != null && i < orderDirections.size()) 
+                    ? orderDirections.get(i) : "ASC";
+                orderClauses.add(column + " " + direction);
+            }
+            sql.append(String.join(", ", orderClauses));
+        }
+        
+        String logMessage = sql + (!params.getValues().isEmpty() ? " :: " + params.getValues() : "");
+        logService.logOperation(logMessage);
+        
+        try {
+            return namedTemplate.queryForList(sql.toString(), params);
+        } catch (Exception ex) {
+            logService.logError(sql.toString(), ex.getMessage());
+            throw ex;
+        }
+    }
+
     public void insertData(String tableName, Map<String, Object> values, boolean useTransaction) {
         validateIdentifier(tableName, "table");
         if (values == null || values.isEmpty()) {
@@ -340,5 +427,148 @@ public class DatabaseService {
             return "public";
         }
         return schema;
+    }
+
+    // ========== ALTER TABLE OPERATIONS ==========
+
+    public void renameTable(String oldName, String newName) {
+        validateIdentifier(oldName, "table");
+        validateIdentifier(newName, "table");
+        String sql = "ALTER TABLE " + quoteIdentifier(oldName) + " RENAME TO " + quoteIdentifier(newName);
+        try {
+            jdbcTemplate.execute(sql);
+            logService.logOperation(sql);
+        } catch (Exception ex) {
+            logService.logError(sql, ex.getMessage());
+            throw new RuntimeException("Failed to rename table: " + ex.getMessage(), ex);
+        }
+    }
+
+    public void addColumn(String tableName, String columnName, String columnType, String constraints) {
+        validateIdentifier(tableName, "table");
+        validateIdentifier(columnName, "column");
+        
+        String constraintsPart = (constraints != null && !constraints.isBlank()) ? " " + constraints.trim() : "";
+        String sql = "ALTER TABLE " + quoteIdentifier(tableName) + 
+                     " ADD COLUMN " + quoteIdentifier(columnName) + " " + columnType + constraintsPart;
+        try {
+            jdbcTemplate.execute(sql);
+            logService.logOperation(sql);
+        } catch (Exception ex) {
+            logService.logError(sql, ex.getMessage());
+            throw new RuntimeException("Failed to add column: " + ex.getMessage(), ex);
+        }
+    }
+
+    public void dropColumn(String tableName, String columnName) {
+        validateIdentifier(tableName, "table");
+        validateIdentifier(columnName, "column");
+        String sql = "ALTER TABLE " + quoteIdentifier(tableName) + " DROP COLUMN " + quoteIdentifier(columnName);
+        try {
+            jdbcTemplate.execute(sql);
+            logService.logOperation(sql);
+        } catch (Exception ex) {
+            logService.logError(sql, ex.getMessage());
+            throw new RuntimeException("Failed to drop column: " + ex.getMessage(), ex);
+        }
+    }
+
+    public void renameColumn(String tableName, String oldColumnName, String newColumnName) {
+        validateIdentifier(tableName, "table");
+        validateIdentifier(oldColumnName, "column");
+        validateIdentifier(newColumnName, "column");
+        String sql = "ALTER TABLE " + quoteIdentifier(tableName) + 
+                     " RENAME COLUMN " + quoteIdentifier(oldColumnName) + " TO " + quoteIdentifier(newColumnName);
+        try {
+            jdbcTemplate.execute(sql);
+            logService.logOperation(sql);
+        } catch (Exception ex) {
+            logService.logError(sql, ex.getMessage());
+            throw new RuntimeException("Failed to rename column: " + ex.getMessage(), ex);
+        }
+    }
+
+    public void alterColumnType(String tableName, String columnName, String newType, boolean useCast) {
+        validateIdentifier(tableName, "table");
+        validateIdentifier(columnName, "column");
+        
+        String usingClause = useCast ? " USING " + quoteIdentifier(columnName) + "::" + newType : "";
+        String sql = "ALTER TABLE " + quoteIdentifier(tableName) + 
+                     " ALTER COLUMN " + quoteIdentifier(columnName) + " TYPE " + newType + usingClause;
+        try {
+            jdbcTemplate.execute(sql);
+            logService.logOperation(sql);
+        } catch (Exception ex) {
+            logService.logError(sql, ex.getMessage());
+            throw new RuntimeException("Failed to alter column type: " + ex.getMessage(), ex);
+        }
+    }
+
+    public void addConstraint(String tableName, String constraintName, String constraintDefinition) {
+        validateIdentifier(tableName, "table");
+        
+        String namePart = (constraintName != null && !constraintName.isBlank()) 
+                ? "CONSTRAINT " + quoteIdentifier(constraintName) + " " 
+                : "";
+        String sql = "ALTER TABLE " + quoteIdentifier(tableName) + " ADD " + namePart + constraintDefinition;
+        try {
+            jdbcTemplate.execute(sql);
+            logService.logOperation(sql);
+        } catch (Exception ex) {
+            logService.logError(sql, ex.getMessage());
+            throw new RuntimeException("Failed to add constraint: " + ex.getMessage(), ex);
+        }
+    }
+
+    public void dropConstraint(String tableName, String constraintName) {
+        validateIdentifier(tableName, "table");
+        validateIdentifier(constraintName, "constraint");
+        String sql = "ALTER TABLE " + quoteIdentifier(tableName) + " DROP CONSTRAINT " + quoteIdentifier(constraintName);
+        try {
+            jdbcTemplate.execute(sql);
+            logService.logOperation(sql);
+        } catch (Exception ex) {
+            logService.logError(sql, ex.getMessage());
+            throw new RuntimeException("Failed to drop constraint: " + ex.getMessage(), ex);
+        }
+    }
+
+    public void setNotNull(String tableName, String columnName) {
+        validateIdentifier(tableName, "table");
+        validateIdentifier(columnName, "column");
+        String sql = "ALTER TABLE " + quoteIdentifier(tableName) + 
+                     " ALTER COLUMN " + quoteIdentifier(columnName) + " SET NOT NULL";
+        try {
+            jdbcTemplate.execute(sql);
+            logService.logOperation(sql);
+        } catch (Exception ex) {
+            logService.logError(sql, ex.getMessage());
+            throw new RuntimeException("Failed to set NOT NULL: " + ex.getMessage(), ex);
+        }
+    }
+
+    public void dropNotNull(String tableName, String columnName) {
+        validateIdentifier(tableName, "table");
+        validateIdentifier(columnName, "column");
+        String sql = "ALTER TABLE " + quoteIdentifier(tableName) + 
+                     " ALTER COLUMN " + quoteIdentifier(columnName) + " DROP NOT NULL";
+        try {
+            jdbcTemplate.execute(sql);
+            logService.logOperation(sql);
+        } catch (Exception ex) {
+            logService.logError(sql, ex.getMessage());
+            throw new RuntimeException("Failed to drop NOT NULL: " + ex.getMessage(), ex);
+        }
+    }
+
+    // Custom query execution for string functions and other operations
+    public List<Map<String, Object>> executeCustomQuery(String sql) {
+        logService.logOperation(sql);
+        try {
+            return jdbcTemplate.queryForList(sql);
+        } catch (Exception ex) {
+            logService.logError(sql, ex.getMessage());
+            throw new RuntimeException("Query failed: " + ex.getMessage(), ex);
+        }
     }
 }

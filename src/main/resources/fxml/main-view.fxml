@@ -81,6 +81,126 @@
                         </ScrollPane>
                     </content>
                 </Tab>
+                <Tab text="Alter Table" closable="false">
+                    <content>
+                        <ScrollPane fitToWidth="true">
+                            <content>
+                                <VBox spacing="16">
+                                    <padding>
+                                        <Insets top="12" right="12" bottom="12" left="12" />
+                                    </padding>
+                                    
+                                    <!-- Table Selection -->
+                                    <HBox spacing="10" alignment="CENTER_LEFT">
+                                        <Label text="Table:" />
+                                        <ComboBox fx:id="alterTableSelector" prefWidth="200" onAction="#handleAlterTableSelected" />
+                                        <Button text="Refresh" onAction="#handleRefreshAlterTables" />
+                                    </HBox>
+                                    
+                                    <Separator />
+                                    
+                                    <!-- Rename Table -->
+                                    <VBox spacing="8">
+                                        <Label text="Rename Table" styleClass="section-title" />
+                                        <HBox spacing="10" alignment="CENTER_LEFT">
+                                            <TextField fx:id="newTableNameField" promptText="New table name" prefWidth="200" />
+                                            <Button text="Rename Table" onAction="#handleRenameTable" />
+                                        </HBox>
+                                    </VBox>
+                                    
+                                    <Separator />
+                                    
+                                    <!-- Add Column -->
+                                    <VBox spacing="8">
+                                        <Label text="Add Column" styleClass="section-title" />
+                                        <HBox spacing="10" alignment="CENTER_LEFT">
+                                            <TextField fx:id="addColumnNameField" promptText="Column name" prefWidth="150" />
+                                            <ComboBox fx:id="addColumnTypeCombo" promptText="Type" prefWidth="150" />
+                                            <TextField fx:id="addColumnConstraintsField" promptText="Constraints (e.g. NOT NULL)" prefWidth="200" />
+                                            <Button text="Add Column" onAction="#handleAddColumnToTable" />
+                                        </HBox>
+                                    </VBox>
+                                    
+                                    <Separator />
+                                    
+                                    <!-- Drop Column -->
+                                    <VBox spacing="8">
+                                        <Label text="Drop Column" styleClass="section-title" />
+                                        <HBox spacing="10" alignment="CENTER_LEFT">
+                                            <ComboBox fx:id="dropColumnSelector" promptText="Select column" prefWidth="200" />
+                                            <Button text="Drop Column" onAction="#handleDropColumn" />
+                                        </HBox>
+                                    </VBox>
+                                    
+                                    <Separator />
+                                    
+                                    <!-- Rename Column -->
+                                    <VBox spacing="8">
+                                        <Label text="Rename Column" styleClass="section-title" />
+                                        <HBox spacing="10" alignment="CENTER_LEFT">
+                                            <ComboBox fx:id="renameColumnSelector" promptText="Select column" prefWidth="150" />
+                                            <Label text="→" />
+                                            <TextField fx:id="newColumnNameField" promptText="New name" prefWidth="150" />
+                                            <Button text="Rename Column" onAction="#handleRenameColumn" />
+                                        </HBox>
+                                    </VBox>
+                                    
+                                    <Separator />
+                                    
+                                    <!-- Alter Column Type -->
+                                    <VBox spacing="8">
+                                        <Label text="Change Column Type" styleClass="section-title" />
+                                        <HBox spacing="10" alignment="CENTER_LEFT">
+                                            <ComboBox fx:id="alterColumnTypeSelector" promptText="Select column" prefWidth="150" />
+                                            <Label text="→" />
+                                            <ComboBox fx:id="newColumnTypeCombo" promptText="New type" prefWidth="150" />
+                                            <CheckBox fx:id="usingCastCheckbox" text="USING cast" />
+                                            <Button text="Change Type" onAction="#handleAlterColumnType" />
+                                        </HBox>
+                                    </VBox>
+                                    
+                                    <Separator />
+                                    
+                                    <!-- Add Constraints -->
+                                    <VBox spacing="8">
+                                        <Label text="Add Constraint" styleClass="section-title" />
+                                        <HBox spacing="10" alignment="CENTER_LEFT">
+                                            <ComboBox fx:id="constraintTypeCombo" promptText="Constraint type" prefWidth="150" />
+                                            <TextField fx:id="constraintNameField" promptText="Constraint name (optional)" prefWidth="150" />
+                                            <TextField fx:id="constraintDefinitionField" promptText="Definition" prefWidth="250" />
+                                            <Button text="Add Constraint" onAction="#handleAddConstraint" />
+                                        </HBox>
+                                        <Label text="Examples: CHECK (age > 0), UNIQUE (email), FOREIGN KEY (dept_id) REFERENCES departments(id)" 
+                                               style="-fx-font-size: 10px; -fx-text-fill: gray;" wrapText="true" />
+                                    </VBox>
+                                    
+                                    <Separator />
+                                    
+                                    <!-- Drop Constraint -->
+                                    <VBox spacing="8">
+                                        <Label text="Drop Constraint" styleClass="section-title" />
+                                        <HBox spacing="10" alignment="CENTER_LEFT">
+                                            <TextField fx:id="dropConstraintNameField" promptText="Constraint name" prefWidth="200" />
+                                            <Button text="Drop Constraint" onAction="#handleDropConstraint" />
+                                        </HBox>
+                                    </VBox>
+                                    
+                                    <Separator />
+                                    
+                                    <!-- Set/Drop NOT NULL -->
+                                    <VBox spacing="8">
+                                        <Label text="NOT NULL Constraint" styleClass="section-title" />
+                                        <HBox spacing="10" alignment="CENTER_LEFT">
+                                            <ComboBox fx:id="notNullColumnSelector" promptText="Select column" prefWidth="150" />
+                                            <Button text="SET NOT NULL" onAction="#handleSetNotNull" />
+                                            <Button text="DROP NOT NULL" onAction="#handleDropNotNull" />
+                                        </HBox>
+                                    </VBox>
+                                </VBox>
+                            </content>
+                        </ScrollPane>
+                    </content>
+                </Tab>
                 <Tab text="Data Viewer" closable="false">
                     <content>
                         <VBox spacing="12">
@@ -92,17 +212,151 @@
                                 <ComboBox fx:id="dataTableSelector" prefWidth="200" onAction="#handleDataTableSelected" />
                                 <Button text="Reload" onAction="#handleReloadData" />
                             </HBox>
+                            
+                            <!-- Column Selection -->
                             <VBox spacing="6">
                                 <HBox spacing="10" alignment="CENTER_LEFT">
-                                    <Label text="Filters:" />
+                                    <Label text="Select Columns:" />
+                                    <CheckBox fx:id="selectAllColumnsCheckbox" text="All (*)" selected="true" onAction="#handleSelectAllColumns" />
+                                    <Button text="Choose..." onAction="#handleChooseColumns" />
+                                    <Label fx:id="selectedColumnsLabel" text="" />
+                                </HBox>
+                            </VBox>
+                            
+                            <!-- Filters -->
+                            <VBox spacing="6">
+                                <HBox spacing="10" alignment="CENTER_LEFT">
+                                    <Label text="Filters (WHERE):" />
                                     <Button text="Add Filter" onAction="#handleAddFilter" />
                                     <Button text="Clear" onAction="#handleClearFilter" />
-                                    <Region HBox.hgrow="ALWAYS" />
-                                    <Button text="Apply" onAction="#handleReloadData" />
                                 </HBox>
                                 <VBox fx:id="filterRowsContainer" spacing="4" />
                             </VBox>
-                            <TableView fx:id="dataTableView" prefHeight="320" />
+                            
+                            <!-- Sorting -->
+                            <VBox spacing="6">
+                                <HBox spacing="10" alignment="CENTER_LEFT">
+                                    <Label text="Sort (ORDER BY):" />
+                                    <ComboBox fx:id="orderByColumnCombo" promptText="Column" prefWidth="150" />
+                                    <ComboBox fx:id="orderDirectionCombo" prefWidth="100" />
+                                    <Button text="Add Sort" onAction="#handleAddSort" />
+                                    <Button text="Clear" onAction="#handleClearSort" />
+                                </HBox>
+                                <VBox fx:id="sortRowsContainer" spacing="4" />
+                            </VBox>
+                            
+                            <!-- Grouping and Aggregation -->
+                            <VBox spacing="6">
+                                <HBox spacing="10" alignment="CENTER_LEFT">
+                                    <CheckBox fx:id="enableGroupByCheckbox" text="Group By" onAction="#handleToggleGroupBy" />
+                                    <ComboBox fx:id="groupByColumnCombo" promptText="Column" prefWidth="150" disable="true" />
+                                    <Button text="Add Group" onAction="#handleAddGroupBy" disable="true" fx:id="addGroupButton" />
+                                    <Button text="Clear Groups" onAction="#handleClearGroupBy" disable="true" fx:id="clearGroupButton" />
+                                </HBox>
+                                <VBox fx:id="groupByRowsContainer" spacing="4" />
+                            </VBox>
+                            
+                            <!-- Aggregate Functions -->
+                            <VBox spacing="6" fx:id="aggregateSection" visible="false" managed="false">
+                                <HBox spacing="10" alignment="CENTER_LEFT">
+                                    <Label text="Aggregate Functions:" />
+                                    <ComboBox fx:id="aggregateFunctionCombo" promptText="Function" prefWidth="100" />
+                                    <ComboBox fx:id="aggregateColumnCombo" promptText="Column" prefWidth="150" />
+                                    <TextField fx:id="aggregateAliasField" promptText="Alias (optional)" prefWidth="120" />
+                                    <Button text="Add" onAction="#handleAddAggregate" />
+                                    <Button text="Clear" onAction="#handleClearAggregates" />
+                                </HBox>
+                                <VBox fx:id="aggregateRowsContainer" spacing="4" />
+                            </VBox>
+                            
+                            <!-- HAVING clause -->
+                            <VBox spacing="6" fx:id="havingSection" visible="false" managed="false">
+                                <HBox spacing="10" alignment="CENTER_LEFT">
+                                    <Label text="HAVING (filter groups):" />
+                                    <TextField fx:id="havingConditionField" promptText="e.g. COUNT(*) > 5" prefWidth="300" />
+                                </HBox>
+                            </VBox>
+                            
+                            <!-- Execute Button -->
+                            <HBox spacing="10" alignment="CENTER_LEFT">
+                                <Button text="Execute Query" onAction="#handleReloadData" style="-fx-font-weight: bold;" />
+                                <Button text="Reset All" onAction="#handleResetQueryBuilder" />
+                                <Separator orientation="VERTICAL" />
+                                <Button text="String Functions..." onAction="#handleShowStringFunctions" />
+                            </HBox>
+                            
+                            <TableView fx:id="dataTableView" prefHeight="320" VBox.vgrow="ALWAYS" />
+                        </VBox>
+                    </content>
+                </Tab>
+                <Tab text="JOIN Wizard" closable="false">
+                    <content>
+                        <VBox spacing="16">
+                            <padding>
+                                <Insets top="12" right="12" bottom="12" left="12" />
+                            </padding>
+                            
+                            <!-- Left Table Selection -->
+                            <VBox spacing="8">
+                                <Label text="Primary Table" styleClass="section-title" />
+                                <HBox spacing="10" alignment="CENTER_LEFT">
+                                    <Label text="Table:" />
+                                    <ComboBox fx:id="joinLeftTableCombo" prefWidth="200" onAction="#handleJoinLeftTableSelected" />
+                                    <Label text="Alias:" />
+                                    <TextField fx:id="joinLeftAliasField" promptText="Optional" prefWidth="100" />
+                                </HBox>
+                            </VBox>
+                            
+                            <Separator />
+                            
+                            <!-- Joins Configuration -->
+                            <VBox spacing="8">
+                                <HBox spacing="10" alignment="CENTER_LEFT">
+                                    <Label text="Joins" styleClass="section-title" />
+                                    <Button text="Add JOIN" onAction="#handleAddJoin" />
+                                    <Button text="Clear All" onAction="#handleClearJoins" />
+                                </HBox>
+                                <VBox fx:id="joinRowsContainer" spacing="10" />
+                            </VBox>
+                            
+                            <Separator />
+                            
+                            <!-- Column Selection for Result -->
+                            <VBox spacing="8">
+                                <Label text="Select Columns to Display" styleClass="section-title" />
+                                <Button text="Choose Columns..." onAction="#handleChooseJoinColumns" />
+                                <Label fx:id="joinSelectedColumnsLabel" text="All columns will be displayed" />
+                            </VBox>
+                            
+                            <Separator />
+                            
+                            <!-- Additional Clauses -->
+                            <VBox spacing="8">
+                                <Label text="Additional Options" styleClass="section-title" />
+                                <HBox spacing="10">
+                                    <Label text="WHERE:" />
+                                    <TextField fx:id="joinWhereField" promptText="e.g. t1.age > 18" prefWidth="300" />
+                                </HBox>
+                                <HBox spacing="10">
+                                    <Label text="ORDER BY:" />
+                                    <TextField fx:id="joinOrderByField" promptText="e.g. t1.name ASC" prefWidth="300" />
+                                </HBox>
+                                <HBox spacing="10">
+                                    <Label text="LIMIT:" />
+                                    <TextField fx:id="joinLimitField" promptText="e.g. 100" prefWidth="100" />
+                                </HBox>
+                            </VBox>
+                            
+                            <Separator />
+                            
+                            <!-- Execute -->
+                            <HBox spacing="10" alignment="CENTER_LEFT">
+                                <Button text="Execute JOIN Query" onAction="#handleExecuteJoin" style="-fx-font-weight: bold;" />
+                                <Button text="Show SQL" onAction="#handleShowJoinSQL" />
+                            </HBox>
+                            
+                            <!-- Results -->
+                            <TableView fx:id="joinResultsTableView" prefHeight="300" VBox.vgrow="ALWAYS" />
                         </VBox>
                     </content>
                 </Tab>

@@ -3,7 +3,11 @@ package com.example.dbschemastudio.model;
 import java.util.Optional;
 
 public record DataFilter(String column, String operator, String value) {
-    private static final String[] SUPPORTED_OPERATORS = {"=", "!=", ">", "<", ">=", "<=", "LIKE", "ILIKE"};
+    private static final String[] SUPPORTED_OPERATORS = {
+        "=", "!=", ">", "<", ">=", "<=", 
+        "LIKE", "ILIKE", "NOT LIKE", "NOT ILIKE",
+        "~", "~*", "!~", "!~*"  // POSIX regex operators
+    };
 
     public DataFilter {
         if (column == null || column.isBlank()) {
