@@ -205,7 +205,7 @@ public class DatabaseService {
         
         // Build SELECT clause
         StringBuilder sql = new StringBuilder("SELECT ");
-        if (selectColumns == null || selectColumns.isEmpty()) {
+        if (selectColumns == null) {
             sql.append("*");
         } else {
             List<String> quoted = selectColumns.stream()

@@ -479,12 +479,11 @@ public class MainViewController {
             showError(ex.getMessage());
             return;
         }
-        
         // Check if advanced SELECT features are being used
         boolean hasSort = !sortRows.isEmpty();
         boolean hasGroup = enableGroupByCheckbox != null && enableGroupByCheckbox.isSelected();
         boolean hasAggregates = !aggregateFunctions.isEmpty();
-        boolean useAdvanced = hasSort || hasGroup || hasAggregates || !selectedColumns.isEmpty();
+        boolean useAdvanced = hasSort || hasGroup || hasAggregates || selectedColumns != null;
         
         if (!useAdvanced) {
             // Use simple query
@@ -496,6 +495,8 @@ public class MainViewController {
             // Use advanced query
             List<String> selectCols = (selectAllColumnsCheckbox != null && selectAllColumnsCheckbox.isSelected()) 
                 ? null : selectedColumns;
+
+            // if
             
             List<String> orderCols = sortRows.stream().map(row -> row.column).toList();
             List<String> orderDirs = sortRows.stream().map(row -> row.direction).toList();
@@ -1013,7 +1014,7 @@ public class MainViewController {
         dialog.showAndWait().ifPresent(selected -> {
             selectedColumns = new ArrayList<>(selected);
             if (selectAllColumnsCheckbox != null) {
-                selectAllColumnsCheckbox.setSelected(selected.isEmpty());
+                // selectAllColumnsCheckbox.setSelected(selected.isEmpty());
             }
             if (selectedColumnsLabel != null) {
                 selectedColumnsLabel.setText(selected.isEmpty() ? "" : 
