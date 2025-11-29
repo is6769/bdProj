@@ -246,28 +246,35 @@ public class DatabaseService {
         
         // Build SELECT clause
         StringBuilder sql = new StringBuilder("SELECT ");
+        List<String> selectParts = new ArrayList<>();
+        
         if (selectColumns == null) {
-            sql.append("*");
-        } else {
-            List<String> quoted = selectColumns.stream()
-                .map(col -> {
-                    // Handle aggregate functions or aliases (don't quote those)
-                    if (col.contains("(") || col.contains(" AS ")) {
-                        return col;
-                    }
-                    return quoteIdentifier(col);
-                })
-                .toList();
-            sql.append(String.join(", ", quoted));
+            // null means "all columns"
+            selectParts.add("*");
+        } else if (!selectColumns.isEmpty()) {
+            // Add specified columns
+            for (String col : selectColumns) {
+                // Handle aggregate functions or aliases (don't quote those)
+                if (col.contains("(") || col.contains(" AS ")) {
+                    selectParts.add(col);
+                } else {
+                    selectParts.add(quoteIdentifier(col));
+                }
+            }
         }
+        // If selectColumns is empty list, we don't add anything - will use aggregates only
         
         // Add aggregates if present
         if (aggregates != null && !aggregates.isEmpty()) {
-            if (selectColumns != null && !selectColumns.isEmpty()) {
-                sql.append(", ");
-            }
-            sql.append(String.join(", ", aggregates));
+            selectParts.addAll(aggregates);
         }
+        
+        // If no columns or aggregates selected, default to *
+        if (selectParts.isEmpty()) {
+            selectParts.add("*");
+        }
+        
+        sql.append(String.join(", ", selectParts));
         
         sql.append(" FROM ").append(quoteIdentifier(tableName));
         
@@ -729,9 +736,11 @@ public class DatabaseService {
         StringBuilder sql = new StringBuilder("SELECT ");
         List<String> selectParts = new ArrayList<>();
         
-        if (selectColumns == null || selectColumns.isEmpty()) {
+        if (selectColumns == null) {
+            // null means "all columns"
             selectParts.add("*");
-        } else {
+        } else if (!selectColumns.isEmpty()) {
+            // Add specified columns
             for (String col : selectColumns) {
                 if (col.contains("(") || col.contains(" AS ")) {
                     selectParts.add(col);
@@ -740,15 +749,21 @@ public class DatabaseService {
                 }
             }
         }
+        // If selectColumns is empty list, we don't add anything - will use computed columns or aggregates only
         
         // Add computed columns (CASE expressions)
-        if (computedColumns != null) {
+        if (computedColumns != null && !computedColumns.isEmpty()) {
             selectParts.addAll(computedColumns);
         }
         
         // Add aggregates if present
         if (aggregates != null && !aggregates.isEmpty()) {
             selectParts.addAll(aggregates);
+        }
+        
+        // If no columns, computed columns, or aggregates selected, default to *
+        if (selectParts.isEmpty()) {
+            selectParts.add("*");
         }
         
         sql.append(String.join(", ", selectParts));

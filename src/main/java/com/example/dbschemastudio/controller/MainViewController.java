@@ -1062,7 +1062,8 @@ public class MainViewController {
                 // selectAllColumnsCheckbox.setSelected(selected.isEmpty());
             }
             if (selectedColumnsLabel != null) {
-                selectedColumnsLabel.setText(selected.isEmpty() ? "" : 
+                selectedColumnsLabel.setText(selected.isEmpty() ? 
+                    "(No columns selected - using computed/aggregates only)" : 
                     "(" + selected.size() + " columns selected)");
             }
         });
