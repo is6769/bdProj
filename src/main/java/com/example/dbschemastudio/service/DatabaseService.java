@@ -130,9 +130,9 @@ public class DatabaseService {
 
     public List<String> listEnums() {
         String sql = "SELECT t.typname FROM pg_type t " +
-                     "JOIN pg_namespace n ON t.typnamespace = n.oid " +
-                     "WHERE t.typtype = 'e' AND n.nspname = current_schema() " +
-                     "ORDER BY t.typname";
+                "JOIN pg_namespace n ON t.typnamespace = n.oid " +
+                "WHERE t.typtype = 'e' AND n.nspname = current_schema() " +
+                "ORDER BY t.typname";
         try {
             return jdbcTemplate.queryForList(sql, String.class);
         } catch (Exception ex) {
@@ -144,9 +144,9 @@ public class DatabaseService {
     public List<String> getEnumValues(String enumName) {
         validateIdentifier(enumName, "enum type");
         String sql = "SELECT e.enumlabel FROM pg_enum e " +
-                     "JOIN pg_type t ON e.enumtypid = t.oid " +
-                     "WHERE t.typname = ? " +
-                     "ORDER BY e.enumsortorder";
+                "JOIN pg_type t ON e.enumtypid = t.oid " +
+                "WHERE t.typname = ? " +
+                "ORDER BY e.enumsortorder";
         try {
             return jdbcTemplate.queryForList(sql, String.class, enumName);
         } catch (Exception ex) {
@@ -204,73 +204,80 @@ public class DatabaseService {
         String operator = filter.operator();
         String value = filter.value();
         String paramName = "value" + index;
-        
+
         // Handle IS NULL / IS NOT NULL (no value needed)
         if ("IS NULL".equals(operator) || "IS NOT NULL".equals(operator)) {
             return column + " " + operator;
         }
-        
+
         // Handle SIMILAR TO / NOT SIMILAR TO (pattern as literal)
         if ("SIMILAR TO".equals(operator) || "NOT SIMILAR TO".equals(operator)) {
             // Escape single quotes in pattern
             String escapedPattern = value.replace("'", "''");
             return column + " " + operator + " '" + escapedPattern + "'";
         }
-        
+
         // Handle regex operators
         if (operator != null && (operator.startsWith("~") || operator.startsWith("!~"))) {
             params.addValue(paramName, value);
             return column + " " + operator + " :" + paramName;
         }
-        
+
         // Handle LIKE/ILIKE operators
         if (operator != null && (operator.contains("LIKE"))) {
             params.addValue(paramName, value);
             return column + " " + operator + " :" + paramName;
         }
-        
+
         // Standard comparison operators
         params.addValue(paramName, normalizeValue(value, Optional.of(filter.column())));
         return column + " " + operator + " :" + paramName;
     }
 
-    public List<Map<String, Object>> fetchDataAdvanced(String tableName, 
-                                                        List<String> selectColumns,
-                                                        List<DataFilter> filters,
-                                                        List<String> orderByColumns,
-                                                        List<String> orderDirections,
-                                                        List<String> groupByColumns,
-                                                        List<String> aggregates,
-                                                        String havingClause) {
+    public List<Map<String, Object>> fetchDataAdvanced(String tableName,
+                                                       List<String> selectColumns,
+                                                       List<DataFilter> filters,
+                                                       List<String> orderByColumns,
+                                                       List<String> orderDirections,
+                                                       List<String> groupByColumns,
+                                                       List<String> aggregates,
+                                                       String havingClause) {
         validateIdentifier(tableName, "table");
-        
+
         // Build SELECT clause
         StringBuilder sql = new StringBuilder("SELECT ");
+        List<String> selectParts = new ArrayList<>();
+
         if (selectColumns == null) {
-            sql.append("*");
-        } else {
-            List<String> quoted = selectColumns.stream()
-                .map(col -> {
-                    // Handle aggregate functions or aliases (don't quote those)
-                    if (col.contains("(") || col.contains(" AS ")) {
-                        return col;
-                    }
-                    return quoteIdentifier(col);
-                })
-                .toList();
-            sql.append(String.join(", ", quoted));
+            // null means "all columns"
+            selectParts.add("*");
+        } else if (!selectColumns.isEmpty()) {
+            // Add specified columns
+            for (String col : selectColumns) {
+                // Handle aggregate functions or aliases (don't quote those)
+                if (col.contains("(") || col.contains(" AS ")) {
+                    selectParts.add(col);
+                } else {
+                    selectParts.add(quoteIdentifier(col));
+                }
+            }
         }
-        
+        // If selectColumns is empty list, we don't add anything - will use aggregates only
+
         // Add aggregates if present
         if (aggregates != null && !aggregates.isEmpty()) {
-            if (selectColumns != null && !selectColumns.isEmpty()) {
-                sql.append(", ");
-            }
-            sql.append(String.join(", ", aggregates));
+            selectParts.addAll(aggregates);
         }
-        
+
+        // If no columns or aggregates selected, default to *
+        if (selectParts.isEmpty()) {
+            selectParts.add("*");
+        }
+
+        sql.append(String.join(", ", selectParts));
+
         sql.append(" FROM ").append(quoteIdentifier(tableName));
-        
+
         // Build WHERE clause
         MapSqlParameterSource params = new MapSqlParameterSource();
         List<DataFilter> activeFilters = filters == null ? List.of() : filters;
@@ -287,35 +294,35 @@ public class DatabaseService {
                 sql.append(" WHERE ").append(String.join(" AND ", clauses));
             }
         }
-        
+
         // Build GROUP BY clause
         if (groupByColumns != null && !groupByColumns.isEmpty()) {
             sql.append(" GROUP BY ");
             List<String> quoted = groupByColumns.stream().map(this::quoteIdentifier).toList();
             sql.append(String.join(", ", quoted));
         }
-        
+
         // Build HAVING clause
         if (havingClause != null && !havingClause.isBlank()) {
             sql.append(" HAVING ").append(havingClause);
         }
-        
+
         // Build ORDER BY clause
         if (orderByColumns != null && !orderByColumns.isEmpty()) {
             sql.append(" ORDER BY ");
             List<String> orderClauses = new ArrayList<>();
             for (int i = 0; i < orderByColumns.size(); i++) {
                 String column = quoteIdentifier(orderByColumns.get(i));
-                String direction = (orderDirections != null && i < orderDirections.size()) 
-                    ? orderDirections.get(i) : "ASC";
+                String direction = (orderDirections != null && i < orderDirections.size())
+                        ? orderDirections.get(i) : "ASC";
                 orderClauses.add(column + " " + direction);
             }
             sql.append(String.join(", ", orderClauses));
         }
-        
+
         String logMessage = sql + (!params.getValues().isEmpty() ? " :: " + params.getValues() : "");
         logService.logOperation(logMessage);
-        
+
         try {
             return namedTemplate.queryForList(sql.toString(), params);
         } catch (Exception ex) {
@@ -491,10 +498,10 @@ public class DatabaseService {
     public void addColumn(String tableName, String columnName, String columnType, String constraints) {
         validateIdentifier(tableName, "table");
         validateIdentifier(columnName, "column");
-        
+
         String constraintsPart = (constraints != null && !constraints.isBlank()) ? " " + constraints.trim() : "";
-        String sql = "ALTER TABLE " + quoteIdentifier(tableName) + 
-                     " ADD COLUMN " + quoteIdentifier(columnName) + " " + columnType + constraintsPart;
+        String sql = "ALTER TABLE " + quoteIdentifier(tableName) +
+                " ADD COLUMN " + quoteIdentifier(columnName) + " " + columnType + constraintsPart;
         try {
             jdbcTemplate.execute(sql);
             logService.logOperation(sql);
@@ -521,8 +528,8 @@ public class DatabaseService {
         validateIdentifier(tableName, "table");
         validateIdentifier(oldColumnName, "column");
         validateIdentifier(newColumnName, "column");
-        String sql = "ALTER TABLE " + quoteIdentifier(tableName) + 
-                     " RENAME COLUMN " + quoteIdentifier(oldColumnName) + " TO " + quoteIdentifier(newColumnName);
+        String sql = "ALTER TABLE " + quoteIdentifier(tableName) +
+                " RENAME COLUMN " + quoteIdentifier(oldColumnName) + " TO " + quoteIdentifier(newColumnName);
         try {
             jdbcTemplate.execute(sql);
             logService.logOperation(sql);
@@ -535,10 +542,10 @@ public class DatabaseService {
     public void alterColumnType(String tableName, String columnName, String newType, boolean useCast) {
         validateIdentifier(tableName, "table");
         validateIdentifier(columnName, "column");
-        
+
         String usingClause = useCast ? " USING " + quoteIdentifier(columnName) + "::" + newType : "";
-        String sql = "ALTER TABLE " + quoteIdentifier(tableName) + 
-                     " ALTER COLUMN " + quoteIdentifier(columnName) + " TYPE " + newType + usingClause;
+        String sql = "ALTER TABLE " + quoteIdentifier(tableName) +
+                " ALTER COLUMN " + quoteIdentifier(columnName) + " TYPE " + newType + usingClause;
         try {
             jdbcTemplate.execute(sql);
             logService.logOperation(sql);
@@ -550,9 +557,9 @@ public class DatabaseService {
 
     public void addConstraint(String tableName, String constraintName, String constraintDefinition) {
         validateIdentifier(tableName, "table");
-        
-        String namePart = (constraintName != null && !constraintName.isBlank()) 
-                ? "CONSTRAINT " + quoteIdentifier(constraintName) + " " 
+
+        String namePart = (constraintName != null && !constraintName.isBlank())
+                ? "CONSTRAINT " + quoteIdentifier(constraintName) + " "
                 : "";
         String sql = "ALTER TABLE " + quoteIdentifier(tableName) + " ADD " + namePart + constraintDefinition;
         try {
@@ -580,8 +587,8 @@ public class DatabaseService {
     public void setNotNull(String tableName, String columnName) {
         validateIdentifier(tableName, "table");
         validateIdentifier(columnName, "column");
-        String sql = "ALTER TABLE " + quoteIdentifier(tableName) + 
-                     " ALTER COLUMN " + quoteIdentifier(columnName) + " SET NOT NULL";
+        String sql = "ALTER TABLE " + quoteIdentifier(tableName) +
+                " ALTER COLUMN " + quoteIdentifier(columnName) + " SET NOT NULL";
         try {
             jdbcTemplate.execute(sql);
             logService.logOperation(sql);
@@ -594,8 +601,8 @@ public class DatabaseService {
     public void dropNotNull(String tableName, String columnName) {
         validateIdentifier(tableName, "table");
         validateIdentifier(columnName, "column");
-        String sql = "ALTER TABLE " + quoteIdentifier(tableName) + 
-                     " ALTER COLUMN " + quoteIdentifier(columnName) + " DROP NOT NULL";
+        String sql = "ALTER TABLE " + quoteIdentifier(tableName) +
+                " ALTER COLUMN " + quoteIdentifier(columnName) + " DROP NOT NULL";
         try {
             jdbcTemplate.execute(sql);
             logService.logOperation(sql);
@@ -607,6 +614,16 @@ public class DatabaseService {
 
     // Custom query execution for string functions and other operations
     public List<Map<String, Object>> executeCustomQuery(String sql) {
+        logService.logOperation(sql);
+        try {
+            return jdbcTemplate.queryForList(sql);
+        } catch (Exception ex) {
+            logService.logError(sql, ex.getMessage());
+            throw new RuntimeException("Query failed: " + ex.getMessage(), ex);
+        }
+    }
+
+    public List<Map<String, Object>> executeCustomQueryV2(String sql) {
         logService.logOperation(sql);
         try {
             return jdbcTemplate.queryForList(sql);
@@ -689,11 +706,11 @@ public class DatabaseService {
         if (newValue == null || newValue.isBlank()) {
             throw new IllegalArgumentException("New value must not be blank");
         }
-        
+
         StringBuilder sql = new StringBuilder();
         sql.append("ALTER TYPE ").append(quoteIdentifier(enumName));
         sql.append(" ADD VALUE '").append(newValue.replace("'", "''")).append("'");
-        
+
         if (position != null && !"At end".equals(position) && refValue != null && !refValue.isBlank()) {
             if ("Before existing value".equals(position)) {
                 sql.append(" BEFORE '").append(refValue.replace("'", "''")).append("'");
@@ -701,7 +718,7 @@ public class DatabaseService {
                 sql.append(" AFTER '").append(refValue.replace("'", "''")).append("'");
             }
         }
-        
+
         try {
             jdbcTemplate.execute(sql.toString());
             logService.logOperation(sql.toString());
@@ -714,24 +731,26 @@ public class DatabaseService {
     // ========== ADVANCED QUERY WITH SUBQUERIES ==========
 
     public List<Map<String, Object>> fetchDataWithSubqueries(String tableName,
-                                                              List<String> selectColumns,
-                                                              List<String> computedColumns,
-                                                              List<DataFilter> filters,
-                                                              List<String> subqueryFilters,
-                                                              List<String> orderByColumns,
-                                                              List<String> orderDirections,
-                                                              List<String> groupByColumns,
-                                                              List<String> aggregates,
-                                                              String havingClause) {
+                                                             List<String> selectColumns,
+                                                             List<String> computedColumns,
+                                                             List<DataFilter> filters,
+                                                             List<String> subqueryFilters,
+                                                             List<String> orderByColumns,
+                                                             List<String> orderDirections,
+                                                             List<String> groupByColumns,
+                                                             List<String> aggregates,
+                                                             String havingClause) {
         validateIdentifier(tableName, "table");
-        
+
         // Build SELECT clause
         StringBuilder sql = new StringBuilder("SELECT ");
         List<String> selectParts = new ArrayList<>();
-        
-        if (selectColumns == null || selectColumns.isEmpty()) {
+
+        if (selectColumns == null) {
+            // null means "all columns"
             selectParts.add("*");
-        } else {
+        } else if (!selectColumns.isEmpty()) {
+            // Add specified columns
             for (String col : selectColumns) {
                 if (col.contains("(") || col.contains(" AS ")) {
                     selectParts.add(col);
@@ -740,24 +759,30 @@ public class DatabaseService {
                 }
             }
         }
-        
+        // If selectColumns is empty list, we don't add anything - will use computed columns or aggregates only
+
         // Add computed columns (CASE expressions)
-        if (computedColumns != null) {
+        if (computedColumns != null && !computedColumns.isEmpty()) {
             selectParts.addAll(computedColumns);
         }
-        
+
         // Add aggregates if present
         if (aggregates != null && !aggregates.isEmpty()) {
             selectParts.addAll(aggregates);
         }
-        
+
+        // If no columns, computed columns, or aggregates selected, default to *
+        if (selectParts.isEmpty()) {
+            selectParts.add("*");
+        }
+
         sql.append(String.join(", ", selectParts));
         sql.append(" FROM ").append(quoteIdentifier(tableName));
-        
+
         // Build WHERE clause
         MapSqlParameterSource params = new MapSqlParameterSource();
         List<String> whereClauses = new ArrayList<>();
-        
+
         List<DataFilter> activeFilters = filters == null ? List.of() : filters;
         for (int i = 0; i < activeFilters.size(); i++) {
             DataFilter filter = activeFilters.get(i);
@@ -766,44 +791,44 @@ public class DatabaseService {
                 whereClauses.add(clause);
             }
         }
-        
+
         // Add subquery filters
         if (subqueryFilters != null) {
             whereClauses.addAll(subqueryFilters);
         }
-        
+
         if (!whereClauses.isEmpty()) {
             sql.append(" WHERE ").append(String.join(" AND ", whereClauses));
         }
-        
+
         // Build GROUP BY clause
         if (groupByColumns != null && !groupByColumns.isEmpty()) {
             sql.append(" GROUP BY ");
             List<String> quoted = groupByColumns.stream().map(this::quoteIdentifier).toList();
             sql.append(String.join(", ", quoted));
         }
-        
+
         // Build HAVING clause
         if (havingClause != null && !havingClause.isBlank()) {
             sql.append(" HAVING ").append(havingClause);
         }
-        
+
         // Build ORDER BY clause
         if (orderByColumns != null && !orderByColumns.isEmpty()) {
             sql.append(" ORDER BY ");
             List<String> orderClauses = new ArrayList<>();
             for (int i = 0; i < orderByColumns.size(); i++) {
                 String column = quoteIdentifier(orderByColumns.get(i));
-                String direction = (orderDirections != null && i < orderDirections.size()) 
-                    ? orderDirections.get(i) : "ASC";
+                String direction = (orderDirections != null && i < orderDirections.size())
+                        ? orderDirections.get(i) : "ASC";
                 orderClauses.add(column + " " + direction);
             }
             sql.append(String.join(", ", orderClauses));
         }
-        
+
         String logMessage = sql + (!params.getValues().isEmpty() ? " :: " + params.getValues() : "");
         logService.logOperation(logMessage);
-        
+
         try {
             return namedTemplate.queryForList(sql.toString(), params);
         } catch (Exception ex) {

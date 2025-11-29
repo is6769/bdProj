@@ -646,7 +646,7 @@ public class MainViewController {
             boolean hasValue = value != null && !value.isBlank();
             
             // Skip completely empty rows
-            if (!hasColumn && !hasValue && (operator == null || operator.isBlank())) {
+            if (!hasColumn && !hasValue ){//&& (operator == null || operator.isBlank())) {
                 continue;
             }
             
@@ -1062,8 +1062,9 @@ public class MainViewController {
                 // selectAllColumnsCheckbox.setSelected(selected.isEmpty());
             }
             if (selectedColumnsLabel != null) {
-                selectedColumnsLabel.setText(selected.isEmpty() ? "" : 
-                    "(" + selected.size() + " columns selected)");
+                selectedColumnsLabel.setText(selected.isEmpty() ?
+                        "(No columns selected - using computed/aggregates only)" :
+                        "(" + selected.size() + " columns selected)");
             }
         });
     }
@@ -1898,114 +1899,133 @@ public class MainViewController {
 
     private void showNullFunctionsDialog(String tableName, List<ColumnMetadata> columns) {
         Dialog<Void> dialog = new Dialog<>();
-        dialog.setTitle("NULL Handling Functions");
-        dialog.setHeaderText("Apply COALESCE or NULLIF functions");
-        
+        dialog. setTitle("NULL Handling Functions");
+        dialog. setHeaderText("Apply COALESCE or NULLIF functions");
+
         VBox content = new VBox(15);
-        content.setPadding(new Insets(15));
-        
+        content. setPadding(new Insets(15));
+
         // Function selection
         Label functionLabel = new Label("Function:");
         ComboBox<String> functionCombo = new ComboBox<>();
-        functionCombo.setItems(FXCollections.observableArrayList("COALESCE", "NULLIF"));
+        functionCombo. setItems(FXCollections.observableArrayList("COALESCE", "NULLIF"));
         functionCombo.setValue("COALESCE");
         functionCombo.setPrefWidth(200);
-        
+
         // Column selection
         Label columnLabel = new Label("Column:");
         ComboBox<String> columnCombo = new ComboBox<>();
-        columnCombo.setItems(FXCollections.observableArrayList(
-            columns.stream().map(ColumnMetadata::name).toList()
+        columnCombo. setItems(FXCollections.observableArrayList(
+                columns.stream().map(ColumnMetadata::name).toList()
         ));
         columnCombo.setPrefWidth(200);
-        
+
         // Value input
         Label valueLabel = new Label("Value:");
         TextField valueField = new TextField();
         valueField.setPrefWidth(200);
-        
+
         // Description updates based on function
         Label descLabel = new Label();
-        descLabel.setWrapText(true);
+        descLabel. setWrapText(true);
         descLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: gray;");
-        
+
         functionCombo.setOnAction(e -> {
-            String func = functionCombo.getValue();
+            String func = functionCombo. getValue();
             if ("COALESCE".equals(func)) {
                 valueField.setPromptText("Default value when NULL");
-                descLabel.setText("COALESCE returns the first non-NULL value. Use this to replace NULL with a default.");
+                descLabel.setText("COALESCE returns the first non-NULL value.  Use this to replace NULL with a default.");
             } else {
-                valueField.setPromptText("Value to compare");
-                descLabel.setText("NULLIF returns NULL if the column value equals the specified value, otherwise returns the column value.");
+                valueField. setPromptText("Value to compare");
+                descLabel. setText("NULLIF returns NULL if the column value equals the specified value, otherwise returns the column value.");
             }
         });
         functionCombo.fireEvent(new javafx.event.ActionEvent());
-        
+
         // Result preview
         TextArea resultArea = new TextArea();
         resultArea.setEditable(false);
         resultArea.setPrefRowCount(10);
-        
+
         Button applyButton = new Button("Apply & Preview");
         applyButton.setOnAction(e -> {
-            String function = functionCombo.getValue();
+            String function = functionCombo. getValue();
             String column = columnCombo.getValue();
             String value = valueField.getText();
-            
+
+            // Валидация с выводом ошибки в resultArea вместо showError
             if (column == null || column.isBlank()) {
-                showError("Please select a column");
+                resultArea.setText("Error: Please select a column");
                 return;
             }
             if (value == null || value.isBlank()) {
-                showError("Please enter a value");
+                resultArea.setText("Error: Please enter a value");
                 return;
             }
-            
-            String quotedValue = value.matches("-?\\d+(\\.\\d+)?") ? value : "'" + value.replace("'", "''") + "'";
+
+            String quotedValue = value.matches("-?\\d+(\\.\\d+)? ") ? value : "'" + value. replace("'", "''") + "'";
             String funcExpr = function + "(" + quoteIdent(column) + ", " + quotedValue + ")";
-            
-            String sql = "SELECT " + quoteIdent(column) + " AS original, " + funcExpr + " AS result FROM " + 
-                         quoteIdent(tableName) + " LIMIT 20";
-            
-            runAsyncWithErrors("Applying function", 
-                () -> databaseService.executeCustomQuery(sql),
-                results -> {
-                    StringBuilder sb = new StringBuilder();
-                    sb.append("Function: ").append(funcExpr).append("\n\n");
-                    sb.append(String.format("%-30s | %-30s\n", "Original", "Result"));
-                    sb.append("-".repeat(63)).append("\n");
-                    
-                    for (Map<String, Object> row : results) {
-                        Object orig = row.get("original");
-                        Object res = row.get("result");
-                        sb.append(String.format("%-30s | %-30s\n", 
-                            orig != null ? orig.toString() : "NULL",
-                            res != null ? res.toString() : "NULL"));
-                    }
-                    
-                    resultArea.setText(sb.toString());
-                });
+
+            String sql = "SELECT " + quoteIdent(column) + " AS original, " + funcExpr + " AS result FROM " +
+                    quoteIdent(tableName) + " LIMIT 20";
+
+            // Используем модифицированный async вызов с обработкой ошибок в resultArea
+            statusLabel.setText("Applying function...");
+            CompletableFuture
+                    .supplyAsync(() -> {
+                        try {
+                            return databaseService.executeCustomQuery(sql);
+                        } catch (Exception ex) {
+                            throw new CompletionException(ex);
+                        }
+                    }, dbExecutor)
+                    .whenComplete((results, throwable) -> Platform.runLater(() -> {
+                        if (throwable != null) {
+                            // Выводим ошибку в preview вместо showError
+                            Throwable cause = throwable instanceof CompletionException && throwable.getCause() != null
+                                    ? throwable.getCause() : throwable;
+                            String message = cause.getMessage() != null ? cause.getMessage() : cause.toString();
+                            resultArea.setText("Error: " + message + "\n\nPlease check that the value type matches the column type.");
+                            statusLabel.setText("Function application failed");
+                        } else {
+                            StringBuilder sb = new StringBuilder();
+                            sb. append("Function: ").append(funcExpr).append("\n\n");
+                            sb.append(String.format("%-30s | %-30s\n", "Original", "Result"));
+                            sb.append("-".repeat(63)). append("\n");
+
+                            for (Map<String, Object> row : results) {
+                                Object orig = row.get("original");
+                                Object res = row.get("result");
+                                sb.append(String. format("%-30s | %-30s\n",
+                                        orig != null ? orig.toString() : "NULL",
+                                        res != null ? res. toString() : "NULL"));
+                            }
+
+                            resultArea.setText(sb.toString());
+                            statusLabel.setText("Function applied successfully");
+                        }
+                    }));
         });
-        
+
         content.getChildren().addAll(
-            functionLabel, functionCombo,
-            descLabel,
-            columnLabel, columnCombo,
-            valueLabel, valueField,
-            applyButton,
-            new Separator(),
-            new Label("Preview (first 20 rows):"),
-            resultArea
+                functionLabel, functionCombo,
+                descLabel,
+                columnLabel, columnCombo,
+                valueLabel, valueField,
+                applyButton,
+                new Separator(),
+                new Label("Preview (first 20 rows):"),
+                resultArea
         );
-        
+
         ScrollPane scrollPane = new ScrollPane(content);
-        scrollPane.setFitToWidth(true);
+        scrollPane. setFitToWidth(true);
         scrollPane.setPrefHeight(500);
         scrollPane.setPrefWidth(500);
-        
+
         dialog.getDialogPane().setContent(scrollPane);
-        dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
-        
+        dialog.getDialogPane().getButtonTypes().add(ButtonType. CLOSE);
+
         dialog.showAndWait();
     }
 
