@@ -1,17 +1,922 @@
+/* ============================================
+   DB Schema Studio - Modern Dark Theme
+   ============================================ */
+
+/* ========== ROOT & GLOBAL STYLES ========== */
+.root {
+    -fx-base: #2b2b2b;
+    -fx-background: #1e1e1e;
+    -fx-control-inner-background: #2d2d2d;
+    -fx-control-inner-background-alt: #353535;
+    -fx-accent: #4a9eff;
+    -fx-focus-color: #4a9eff;
+    -fx-faint-focus-color: rgba(74, 158, 255, 0.3);
+    -fx-text-base-color: #e0e0e0;
+    -fx-text-fill: #e0e0e0;
+    -fx-font-family: "Segoe UI", "SF Pro Display", system-ui;
+    -fx-font-size: 13px;
+    
+    /* Custom colors */
+    -primary-color: #4a9eff;
+    -primary-dark: #357abd;
+    -primary-light: #6bb3ff;
+    -success-color: #4caf50;
+    -success-dark: #388e3c;
+    -warning-color: #ff9800;
+    -warning-dark: #f57c00;
+    -danger-color: #f44336;
+    -danger-dark: #d32f2f;
+    -surface-color: #252526;
+    -surface-light: #2d2d2d;
+    -surface-lighter: #3c3c3c;
+    -border-color: #404040;
+    -border-light: #555555;
+    -text-primary: #e0e0e0;
+    -text-secondary: #a0a0a0;
+    -text-muted: #707070;
+}
+
+/* ========== LABELS ========== */
+.label {
+    -fx-text-fill: -text-primary;
+}
+
 .section-title {
-    font-size: 15px;
     -fx-font-size: 15px;
-    font-weight: bold;
     -fx-font-weight: bold;
+    -fx-text-fill: -primary-color;
+    -fx-padding: 8 0 4 0;
 }
 
 .text-muted {
-    -fx-text-fill: derive(-fx-text-base-color, -45%);
+    -fx-text-fill: -text-muted;
 }
 
-.sql-log-view {
-    font-family: "Consolas", monospace;
-    -fx-font-family: "Consolas", monospace;
-    font-size: 11px;
+.text-secondary {
+    -fx-text-fill: -text-secondary;
+}
+
+/* ========== BUTTONS ========== */
+.button {
+    -fx-background-color: -surface-lighter;
+    -fx-text-fill: -text-primary;
+    -fx-background-radius: 6;
+    -fx-border-radius: 6;
+    -fx-border-color: -border-color;
+    -fx-border-width: 1;
+    -fx-padding: 8 16 8 16;
+    -fx-cursor: hand;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 2, 0, 0, 1);
+}
+
+.button:hover {
+    -fx-background-color: #4a4a4a;
+    -fx-border-color: -border-light;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.3), 4, 0, 0, 2);
+}
+
+.button:pressed {
+    -fx-background-color: #555555;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.1), 1, 0, 0, 0);
+}
+
+.button:focused {
+    -fx-border-color: -primary-color;
+    -fx-border-width: 2;
+}
+
+.button:disabled {
+    -fx-opacity: 0.5;
+    -fx-cursor: default;
+}
+
+/* Primary Button Style */
+.button-primary, .button:default {
+    -fx-background-color: linear-gradient(to bottom, -primary-color, -primary-dark);
+    -fx-text-fill: white;
+    -fx-border-color: -primary-dark;
+    -fx-font-weight: bold;
+}
+
+.button-primary:hover, .button:default:hover {
+    -fx-background-color: linear-gradient(to bottom, -primary-light, -primary-color);
+    -fx-border-color: -primary-color;
+}
+
+/* Success Button */
+.button-success {
+    -fx-background-color: linear-gradient(to bottom, -success-color, -success-dark);
+    -fx-text-fill: white;
+    -fx-border-color: -success-dark;
+}
+
+.button-success:hover {
+    -fx-background-color: linear-gradient(to bottom, #5cb85c, -success-color);
+}
+
+/* Danger Button */
+.button-danger {
+    -fx-background-color: linear-gradient(to bottom, -danger-color, -danger-dark);
+    -fx-text-fill: white;
+    -fx-border-color: -danger-dark;
+}
+
+.button-danger:hover {
+    -fx-background-color: linear-gradient(to bottom, #ef5350, -danger-color);
+}
+
+/* Small Button */
+.button-small {
+    -fx-padding: 4 10 4 10;
     -fx-font-size: 11px;
+}
+
+/* Icon Button */
+.button-icon {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-padding: 6;
+    -fx-background-radius: 4;
+}
+
+.button-icon:hover {
+    -fx-background-color: -surface-lighter;
+}
+
+/* ========== TEXT FIELDS ========== */
+.text-field, .text-area {
+    -fx-background-color: -surface-color;
+    -fx-text-fill: -text-primary;
+    -fx-prompt-text-fill: -text-muted;
+    -fx-border-color: -border-color;
+    -fx-border-width: 1;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-padding: 8 12 8 12;
+    -fx-highlight-fill: -primary-color;
+    -fx-highlight-text-fill: white;
+}
+
+.text-field:focused, .text-area:focused {
+    -fx-border-color: -primary-color;
+    -fx-border-width: 2;
+    -fx-effect: dropshadow(gaussian, rgba(74, 158, 255, 0.3), 8, 0, 0, 0);
+}
+
+.text-field:hover, .text-area:hover {
+    -fx-border-color: -border-light;
+}
+
+.text-area {
+    -fx-font-family: "Consolas", "Monaco", monospace;
+}
+
+/* ========== COMBO BOX ========== */
+.combo-box {
+    -fx-background-color: -surface-color;
+    -fx-border-color: -border-color;
+    -fx-border-width: 1;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+}
+
+.combo-box:hover {
+    -fx-border-color: -border-light;
+}
+
+.combo-box:focused {
+    -fx-border-color: -primary-color;
+    -fx-border-width: 2;
+}
+
+.combo-box .list-cell {
+    -fx-text-fill: -text-primary;
+    -fx-background-color: transparent;
+    -fx-padding: 6 12 6 12;
+}
+
+.combo-box-popup .list-view {
+    -fx-background-color: -surface-light;
+    -fx-border-color: -border-color;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.4), 10, 0, 0, 4);
+}
+
+.combo-box-popup .list-view .list-cell {
+    -fx-background-color: transparent;
+    -fx-text-fill: -text-primary;
+    -fx-padding: 8 12 8 12;
+}
+
+.combo-box-popup .list-view .list-cell:hover {
+    -fx-background-color: -surface-lighter;
+}
+
+.combo-box-popup .list-view .list-cell:selected {
+    -fx-background-color: -primary-color;
+    -fx-text-fill: white;
+}
+
+.combo-box .arrow-button {
+    -fx-background-color: transparent;
+    -fx-padding: 0 8 0 8;
+}
+
+.combo-box .arrow {
+    -fx-background-color: -text-secondary;
+    -fx-shape: "M0 0 L4 4 L8 0 Z";
+}
+
+/* ========== CHECK BOX ========== */
+.check-box {
+    -fx-text-fill: -text-primary;
+}
+
+.check-box .box {
+    -fx-background-color: -surface-color;
+    -fx-border-color: -border-color;
+    -fx-border-width: 2;
+    -fx-border-radius: 4;
+    -fx-background-radius: 4;
+    -fx-padding: 2;
+}
+
+.check-box:hover .box {
+    -fx-border-color: -primary-color;
+}
+
+.check-box:selected .box {
+    -fx-background-color: -primary-color;
+    -fx-border-color: -primary-color;
+}
+
+.check-box:selected .mark {
+    -fx-background-color: white;
+}
+
+/* ========== LIST VIEW ========== */
+.list-view {
+    -fx-background-color: -surface-color;
+    -fx-border-color: -border-color;
+    -fx-border-width: 1;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-padding: 4;
+}
+
+.list-view .list-cell {
+    -fx-background-color: transparent;
+    -fx-text-fill: -text-primary;
+    -fx-padding: 8 12 8 12;
+    -fx-background-radius: 4;
+}
+
+.list-view .list-cell:hover {
+    -fx-background-color: -surface-lighter;
+}
+
+.list-view .list-cell:selected {
+    -fx-background-color: linear-gradient(to right, -primary-color, -primary-dark);
+    -fx-text-fill: white;
+}
+
+.list-view .list-cell:selected:hover {
+    -fx-background-color: linear-gradient(to right, -primary-light, -primary-color);
+}
+
+.list-view:focused .list-cell:selected {
+    -fx-background-color: linear-gradient(to right, -primary-color, -primary-dark);
+}
+
+/* ========== TABLE VIEW ========== */
+.table-view {
+    -fx-background-color: -surface-color;
+    -fx-border-color: -border-color;
+    -fx-border-width: 1;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-table-cell-border-color: transparent;
+}
+
+.table-view .column-header-background {
+    -fx-background-color: -surface-light;
+    -fx-background-radius: 6 6 0 0;
+}
+
+.table-view .column-header {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent transparent -border-color transparent;
+    -fx-border-width: 0 0 2 0;
+    -fx-padding: 10 8 10 8;
+}
+
+.table-view .column-header .label {
+    -fx-text-fill: -text-primary;
+    -fx-font-weight: bold;
+    -fx-font-size: 12px;
+}
+
+.table-view .table-row-cell {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent transparent -border-color transparent;
+    -fx-border-width: 0 0 1 0;
+}
+
+.table-view .table-row-cell:odd {
+    -fx-background-color: -surface-light;
+}
+
+.table-view .table-row-cell:hover {
+    -fx-background-color: -surface-lighter;
+}
+
+.table-view .table-row-cell:selected {
+    -fx-background-color: -primary-color;
+}
+
+.table-view .table-row-cell:selected .table-cell {
+    -fx-text-fill: white;
+}
+
+.table-view .table-cell {
+    -fx-text-fill: -text-primary;
+    -fx-padding: 8 10 8 10;
+    -fx-alignment: center-left;
+}
+
+.table-view .filler {
+    -fx-background-color: -surface-light;
+}
+
+/* ========== TAB PANE ========== */
+.tab-pane {
+    -fx-tab-min-height: 36;
+    -fx-tab-max-height: 36;
+}
+
+.tab-pane .tab-header-area {
+    -fx-padding: 4 8 0 8;
+}
+
+.tab-pane .tab-header-background {
+    -fx-background-color: -surface-color;
+    -fx-border-color: transparent transparent -border-color transparent;
+    -fx-border-width: 0 0 2 0;
+}
+
+.tab-pane .tab {
+    -fx-background-color: transparent;
+    -fx-background-radius: 8 8 0 0;
+    -fx-padding: 8 20 8 20;
+    -fx-border-color: transparent;
+}
+
+.tab-pane .tab .tab-label {
+    -fx-text-fill: -text-secondary;
+    -fx-font-weight: normal;
+}
+
+.tab-pane .tab:hover {
+    -fx-background-color: -surface-lighter;
+}
+
+.tab-pane .tab:hover .tab-label {
+    -fx-text-fill: -text-primary;
+}
+
+.tab-pane .tab:selected {
+    -fx-background-color: -surface-lighter;
+    -fx-border-color: transparent transparent -primary-color transparent;
+    -fx-border-width: 0 0 3 0;
+}
+
+.tab-pane .tab:selected .tab-label {
+    -fx-text-fill: -primary-color;
+    -fx-font-weight: bold;
+}
+
+.tab-pane .tab-content-area {
+    -fx-background-color: -surface-color;
+    -fx-padding: 0;
+}
+
+/* ========== SCROLL PANE ========== */
+.scroll-pane {
+    -fx-background-color: transparent;
+    -fx-background: transparent;
+}
+
+.scroll-pane .viewport {
+    -fx-background-color: transparent;
+}
+
+.scroll-pane .corner {
+    -fx-background-color: transparent;
+}
+
+/* ========== SCROLL BAR ========== */
+.scroll-bar {
+    -fx-background-color: transparent;
+    -fx-padding: 2;
+}
+
+.scroll-bar .track {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-background-radius: 4;
+}
+
+.scroll-bar .thumb {
+    -fx-background-color: -border-color;
+    -fx-background-radius: 4;
+}
+
+.scroll-bar .thumb:hover {
+    -fx-background-color: -border-light;
+}
+
+.scroll-bar .thumb:pressed {
+    -fx-background-color: -text-muted;
+}
+
+.scroll-bar .increment-button,
+.scroll-bar .decrement-button {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+}
+
+.scroll-bar .increment-arrow,
+.scroll-bar .decrement-arrow {
+    -fx-shape: "";
+    -fx-padding: 0;
+}
+
+/* ========== SEPARATOR ========== */
+.separator {
+    -fx-padding: 8 0 8 0;
+}
+
+.separator .line {
+    -fx-border-color: -border-color;
+    -fx-border-width: 1 0 0 0;
+}
+
+/* ========== TOOLTIP ========== */
+.tooltip {
+    -fx-background-color: #404040;
+    -fx-text-fill: -text-primary;
+    -fx-background-radius: 6;
+    -fx-border-radius: 6;
+    -fx-padding: 8 12 8 12;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.4), 10, 0, 0, 4);
+    -fx-font-size: 12px;
+}
+
+/* ========== DIALOG PANE ========== */
+.dialog-pane {
+    -fx-background-color: -surface-color;
+    -fx-border-color: -border-color;
+    -fx-border-radius: 10;
+    -fx-background-radius: 10;
+    -fx-padding: 20;
+}
+
+.dialog-pane .header-panel {
+    -fx-background-color: -surface-light;
+    -fx-background-radius: 10 10 0 0;
+    -fx-padding: 16;
+}
+
+.dialog-pane .header-panel .label {
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -text-primary;
+}
+
+.dialog-pane .button-bar {
+    -fx-padding: 16 0 0 0;
+}
+
+.dialog-pane .content {
+    -fx-padding: 16;
+}
+
+/* ========== ALERT DIALOGS ========== */
+.alert {
+    -fx-background-color: -surface-color;
+}
+
+.alert .dialog-pane {
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.5), 20, 0, 0, 8);
+}
+
+/* ========== PROGRESS INDICATOR ========== */
+.progress-indicator {
+    -fx-progress-color: -primary-color;
+}
+
+.progress-bar {
+    -fx-background-color: -surface-lighter;
+    -fx-background-radius: 4;
+}
+
+.progress-bar .bar {
+    -fx-background-color: linear-gradient(to right, -primary-dark, -primary-color, -primary-light);
+    -fx-background-radius: 4;
+}
+
+.progress-bar .track {
+    -fx-background-color: -surface-color;
+    -fx-background-radius: 4;
+}
+
+/* ========== HBOX & VBOX ========== */
+.hbox {
+    -fx-spacing: 10;
+}
+
+.vbox {
+    -fx-spacing: 8;
+}
+
+/* ========== GRID PANE ========== */
+.grid-pane {
+    -fx-hgap: 10;
+    -fx-vgap: 10;
+    -fx-padding: 10;
+}
+
+/* ========== BORDER PANE SECTIONS ========== */
+.border-pane {
+    -fx-background-color: -surface-color;
+}
+
+/* ========== SQL LOG VIEW ========== */
+.sql-log-view {
+    -fx-font-family: "Consolas", "Monaco", "Courier New", monospace;
+    -fx-font-size: 11px;
+}
+
+.sql-log-view .list-cell {
+    -fx-padding: 4 8 4 8;
+    -fx-border-color: transparent transparent #333333 transparent;
+    -fx-border-width: 0 0 1 0;
+}
+
+.sql-log-view .list-cell:even {
+    -fx-background-color: #1a1a1a;
+}
+
+.sql-log-view .list-cell:odd {
+    -fx-background-color: #222222;
+}
+
+/* ========== STATUS BAR ========== */
+.status-bar {
+    -fx-background-color: -surface-light;
+    -fx-border-color: -border-color transparent transparent transparent;
+    -fx-border-width: 1 0 0 0;
+    -fx-padding: 8 16 8 16;
+}
+
+.status-bar .label {
+    -fx-text-fill: -text-secondary;
+}
+
+/* ========== TOP BAR / HEADER ========== */
+.header-bar {
+    -fx-background-color: linear-gradient(to bottom, #333333, -surface-color);
+    -fx-border-color: transparent transparent -border-color transparent;
+    -fx-border-width: 0 0 1 0;
+    -fx-padding: 12 16 12 16;
+}
+
+/* ========== CONNECTION STATUS ========== */
+.connection-status-connected {
+    -fx-text-fill: -success-color;
+    -fx-font-weight: bold;
+}
+
+.connection-status-disconnected {
+    -fx-text-fill: -danger-color;
+    -fx-font-weight: bold;
+}
+
+.transaction-status-active {
+    -fx-text-fill: -warning-color;
+    -fx-font-weight: bold;
+}
+
+.transaction-status-inactive {
+    -fx-text-fill: -text-secondary;
+}
+
+/* ========== CARDS ========== */
+.card {
+    -fx-background-color: -surface-light;
+    -fx-background-radius: 10;
+    -fx-border-radius: 10;
+    -fx-border-color: -border-color;
+    -fx-border-width: 1;
+    -fx-padding: 16;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 8, 0, 0, 2);
+}
+
+.card:hover {
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.3), 12, 0, 0, 4);
+}
+
+/* ========== BADGES ========== */
+.badge {
+    -fx-background-color: -primary-color;
+    -fx-text-fill: white;
+    -fx-background-radius: 10;
+    -fx-padding: 2 8 2 8;
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+}
+
+.badge-success {
+    -fx-background-color: -success-color;
+}
+
+.badge-warning {
+    -fx-background-color: -warning-color;
+}
+
+.badge-danger {
+    -fx-background-color: -danger-color;
+}
+
+/* ========== TITLED PANE ========== */
+.titled-pane {
+    -fx-text-fill: -text-primary;
+}
+
+.titled-pane > .title {
+    -fx-background-color: -surface-lighter;
+    -fx-background-radius: 6 6 0 0;
+    -fx-border-color: -border-color;
+    -fx-border-radius: 6 6 0 0;
+    -fx-padding: 8 12 8 12;
+}
+
+.titled-pane > .title:hover {
+    -fx-background-color: #454545;
+}
+
+.titled-pane > .content {
+    -fx-background-color: -surface-color;
+    -fx-border-color: -border-color;
+    -fx-border-width: 0 1 1 1;
+    -fx-border-radius: 0 0 6 6;
+    -fx-background-radius: 0 0 6 6;
+    -fx-padding: 12;
+}
+
+.titled-pane > .title > .arrow-button {
+    -fx-background-color: transparent;
+}
+
+.titled-pane > .title > .arrow-button > .arrow {
+    -fx-background-color: -text-secondary;
+}
+
+/* ========== MENU BAR ========== */
+.menu-bar {
+    -fx-background-color: -surface-light;
+    -fx-border-color: transparent transparent -border-color transparent;
+    -fx-padding: 2 0 2 0;
+}
+
+.menu-bar .menu {
+    -fx-background-color: transparent;
+    -fx-padding: 4 10 4 10;
+}
+
+.menu-bar .menu .label {
+    -fx-text-fill: -text-primary;
+}
+
+.menu-bar .menu:hover,
+.menu-bar .menu:showing {
+    -fx-background-color: -surface-lighter;
+    -fx-background-radius: 4;
+}
+
+.context-menu {
+    -fx-background-color: -surface-light;
+    -fx-border-color: -border-color;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-padding: 6;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.4), 12, 0, 0, 4);
+}
+
+.menu-item {
+    -fx-background-color: transparent;
+    -fx-padding: 8 16 8 16;
+    -fx-background-radius: 4;
+}
+
+.menu-item .label {
+    -fx-text-fill: -text-primary;
+}
+
+.menu-item:hover,
+.menu-item:focused {
+    -fx-background-color: -primary-color;
+}
+
+.menu-item:hover .label,
+.menu-item:focused .label {
+    -fx-text-fill: white;
+}
+
+.menu-item:disabled .label {
+    -fx-text-fill: -text-muted;
+}
+
+/* ========== SPLIT PANE ========== */
+.split-pane {
+    -fx-background-color: -surface-color;
+    -fx-padding: 0;
+}
+
+.split-pane-divider {
+    -fx-background-color: -border-color;
+    -fx-padding: 0 2 0 2;
+}
+
+.split-pane-divider:hover {
+    -fx-background-color: -primary-color;
+}
+
+/* ========== SPINNER ========== */
+.spinner {
+    -fx-background-color: -surface-color;
+    -fx-border-color: -border-color;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+}
+
+.spinner .text-field {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+}
+
+.spinner .increment-arrow-button,
+.spinner .decrement-arrow-button {
+    -fx-background-color: -surface-lighter;
+    -fx-background-radius: 0;
+    -fx-border-color: transparent transparent transparent -border-color;
+}
+
+.spinner .increment-arrow-button:hover,
+.spinner .decrement-arrow-button:hover {
+    -fx-background-color: -primary-color;
+}
+
+/* ========== SLIDER ========== */
+.slider .track {
+    -fx-background-color: -surface-lighter;
+    -fx-background-radius: 4;
+    -fx-pref-height: 6;
+}
+
+.slider .thumb {
+    -fx-background-color: -primary-color;
+    -fx-background-radius: 50%;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.3), 4, 0, 0, 1);
+}
+
+.slider .thumb:hover {
+    -fx-background-color: -primary-light;
+    -fx-effect: dropshadow(gaussian, rgba(74,158,255,0.5), 8, 0, 0, 0);
+}
+
+/* ========== COLOR PICKER ========== */
+.color-picker {
+    -fx-background-color: -surface-color;
+    -fx-border-color: -border-color;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+}
+
+/* ========== PAGINATION ========== */
+.pagination {
+    -fx-page-information-visible: false;
+}
+
+.pagination .button {
+    -fx-background-color: -surface-lighter;
+    -fx-background-radius: 4;
+    -fx-border-radius: 4;
+    -fx-padding: 6 12 6 12;
+}
+
+.pagination .button:hover {
+    -fx-background-color: -primary-color;
+    -fx-text-fill: white;
+}
+
+/* ========== CUSTOM FORM STYLING ========== */
+.form-group {
+    -fx-spacing: 6;
+}
+
+.form-label {
+    -fx-text-fill: -text-secondary;
+    -fx-font-size: 12px;
+}
+
+.form-help-text {
+    -fx-text-fill: -text-muted;
+    -fx-font-size: 11px;
+    -fx-font-style: italic;
+}
+
+.form-error-text {
+    -fx-text-fill: -danger-color;
+    -fx-font-size: 11px;
+}
+
+/* ========== ACCENT COLORS FOR SECTIONS ========== */
+.accent-tables {
+    -fx-border-color: #4caf50 transparent transparent transparent;
+    -fx-border-width: 3 0 0 0;
+}
+
+.accent-data {
+    -fx-border-color: #2196f3 transparent transparent transparent;
+    -fx-border-width: 3 0 0 0;
+}
+
+.accent-insert {
+    -fx-border-color: #ff9800 transparent transparent transparent;
+    -fx-border-width: 3 0 0 0;
+}
+
+/* ========== ANIMATIONS ========== */
+.animated {
+    -fx-transition: all 0.2s ease-in-out;
+}
+
+/* ========== RESPONSIVE PADDING ========== */
+.padding-sm {
+    -fx-padding: 8;
+}
+
+.padding-md {
+    -fx-padding: 16;
+}
+
+.padding-lg {
+    -fx-padding: 24;
+}
+
+/* ========== EMPTY STATE ========== */
+.empty-state {
+    -fx-alignment: center;
+    -fx-padding: 40;
+}
+
+.empty-state .label {
+    -fx-text-fill: -text-muted;
+    -fx-font-size: 14px;
+}
+
+/* ========== HIGHLIGHT EFFECTS ========== */
+.highlight-success {
+    -fx-background-color: rgba(76, 175, 80, 0.1);
+    -fx-border-color: -success-color;
+}
+
+.highlight-warning {
+    -fx-background-color: rgba(255, 152, 0, 0.1);
+    -fx-border-color: -warning-color;
+}
+
+.highlight-danger {
+    -fx-background-color: rgba(244, 67, 54, 0.1);
+    -fx-border-color: -danger-color;
+}
+
+/* ========== CODE/QUERY DISPLAY ========== */
+.code-display {
+    -fx-font-family: "Consolas", "Monaco", "Courier New", monospace;
+    -fx-background-color: #1a1a1a;
+    -fx-text-fill: #d4d4d4;
+    -fx-border-color: -border-color;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-padding: 12;
+}
+
+/* ========== RIGHT SIDEBAR ========== */
+.sidebar-right {
+    -fx-background-color: #1a1a1a;
+    -fx-border-color: -border-color transparent transparent transparent;
+    -fx-border-width: 0 0 0 1;
 }

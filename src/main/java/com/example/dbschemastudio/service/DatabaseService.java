@@ -177,13 +177,16 @@ public class DatabaseService {
             List<String> clauses = new ArrayList<>();
             for (int i = 0; i < activeFilters.size(); i++) {
                 DataFilter filter = activeFilters.get(i);
-                String paramName = "value" + i;
-                clauses.add(quoteIdentifier(filter.column()) + " " + filter.operator() + " :" + paramName);
-                params.addValue(paramName, normalizeValue(filter.value(), Optional.of(filter.column())));
+                String clause = buildFilterClause(filter, i, params);
+                if (clause != null) {
+                    clauses.add(clause);
+                }
             }
-            sql.append(" WHERE ").append(String.join(" AND ", clauses));
+            if (!clauses.isEmpty()) {
+                sql.append(" WHERE ").append(String.join(" AND ", clauses));
+            }
         }
-        String logMessage = sql + (activeFilters.isEmpty() ? "" : " :: " + params.getValues());
+        String logMessage = sql + (params.getValues().isEmpty() ? "" : " :: " + params.getValues());
         logService.logOperation(logMessage);
         try {
             return namedTemplate.queryForList(sql.toString(), params);
@@ -191,6 +194,44 @@ public class DatabaseService {
             logService.logError(sql.toString(), ex.getMessage());
             throw ex;
         }
+    }
+
+    /**
+     * Builds a single filter clause handling special operators like IS NULL, SIMILAR TO, etc.
+     */
+    private String buildFilterClause(DataFilter filter, int index, MapSqlParameterSource params) {
+        String column = quoteIdentifier(filter.column());
+        String operator = filter.operator();
+        String value = filter.value();
+        String paramName = "value" + index;
+        
+        // Handle IS NULL / IS NOT NULL (no value needed)
+        if ("IS NULL".equals(operator) || "IS NOT NULL".equals(operator)) {
+            return column + " " + operator;
+        }
+        
+        // Handle SIMILAR TO / NOT SIMILAR TO (pattern as literal)
+        if ("SIMILAR TO".equals(operator) || "NOT SIMILAR TO".equals(operator)) {
+            // Escape single quotes in pattern
+            String escapedPattern = value.replace("'", "''");
+            return column + " " + operator + " '" + escapedPattern + "'";
+        }
+        
+        // Handle regex operators
+        if (operator != null && (operator.startsWith("~") || operator.startsWith("!~"))) {
+            params.addValue(paramName, value);
+            return column + " " + operator + " :" + paramName;
+        }
+        
+        // Handle LIKE/ILIKE operators
+        if (operator != null && (operator.contains("LIKE"))) {
+            params.addValue(paramName, value);
+            return column + " " + operator + " :" + paramName;
+        }
+        
+        // Standard comparison operators
+        params.addValue(paramName, normalizeValue(value, Optional.of(filter.column())));
+        return column + " " + operator + " :" + paramName;
     }
 
     public List<Map<String, Object>> fetchDataAdvanced(String tableName, 
@@ -237,11 +278,14 @@ public class DatabaseService {
             List<String> clauses = new ArrayList<>();
             for (int i = 0; i < activeFilters.size(); i++) {
                 DataFilter filter = activeFilters.get(i);
-                String paramName = "value" + i;
-                clauses.add(quoteIdentifier(filter.column()) + " " + filter.operator() + " :" + paramName);
-                params.addValue(paramName, normalizeValue(filter.value(), Optional.of(filter.column())));
+                String clause = buildFilterClause(filter, i, params);
+                if (clause != null) {
+                    clauses.add(clause);
+                }
             }
-            sql.append(" WHERE ").append(String.join(" AND ", clauses));
+            if (!clauses.isEmpty()) {
+                sql.append(" WHERE ").append(String.join(" AND ", clauses));
+            }
         }
         
         // Build GROUP BY clause
@@ -569,6 +613,202 @@ public class DatabaseService {
         } catch (Exception ex) {
             logService.logError(sql, ex.getMessage());
             throw new RuntimeException("Query failed: " + ex.getMessage(), ex);
+        }
+    }
+
+    // ========== USER-DEFINED TYPES OPERATIONS ==========
+
+    public void createCompositeType(String typeName, List<String> fieldDefinitions) {
+        validateIdentifier(typeName, "type");
+        if (fieldDefinitions == null || fieldDefinitions.isEmpty()) {
+            throw new IllegalArgumentException("At least one field is required");
+        }
+        String fieldsSql = String.join(", ", fieldDefinitions);
+        String sql = "CREATE TYPE " + quoteIdentifier(typeName) + " AS (" + fieldsSql + ")";
+        try {
+            jdbcTemplate.execute(sql);
+            logService.logOperation(sql);
+        } catch (Exception ex) {
+            logService.logError(sql, ex.getMessage());
+            throw new RuntimeException("Failed to create composite type: " + ex.getMessage(), ex);
+        }
+    }
+
+    public List<String> listCompositeTypes() {
+        String sql = """
+            SELECT t.typname 
+            FROM pg_type t 
+            JOIN pg_namespace n ON t.typnamespace = n.oid 
+            WHERE t.typtype = 'c' 
+            AND n.nspname = current_schema() 
+            AND t.typname NOT LIKE 'pg_%'
+            ORDER BY t.typname
+            """;
+        try {
+            return jdbcTemplate.queryForList(sql, String.class);
+        } catch (Exception ex) {
+            logService.logError(sql, ex.getMessage());
+            throw new RuntimeException("Unable to list composite types", ex);
+        }
+    }
+
+    public List<String> getCompositeTypeFields(String typeName) {
+        validateIdentifier(typeName, "type");
+        String sql = """
+            SELECT a.attname || ' ' || pg_catalog.format_type(a.atttypid, a.atttypmod) as field_def
+            FROM pg_type t
+            JOIN pg_namespace n ON t.typnamespace = n.oid
+            JOIN pg_attribute a ON a.attrelid = t.typrelid
+            WHERE t.typname = ?
+            AND n.nspname = current_schema()
+            AND a.attnum > 0
+            ORDER BY a.attnum
+            """;
+        try {
+            return jdbcTemplate.queryForList(sql, String.class, typeName);
+        } catch (Exception ex) {
+            logService.logError(sql, ex.getMessage());
+            throw new RuntimeException("Unable to get composite type fields", ex);
+        }
+    }
+
+    public void dropType(String typeName) {
+        validateIdentifier(typeName, "type");
+        String sql = "DROP TYPE " + quoteIdentifier(typeName);
+        try {
+            jdbcTemplate.execute(sql);
+            logService.logOperation(sql);
+        } catch (Exception ex) {
+            logService.logError(sql, ex.getMessage());
+            throw new RuntimeException("Failed to drop type: " + ex.getMessage(), ex);
+        }
+    }
+
+    public void addEnumValue(String enumName, String newValue, String position, String refValue) {
+        validateIdentifier(enumName, "enum");
+        if (newValue == null || newValue.isBlank()) {
+            throw new IllegalArgumentException("New value must not be blank");
+        }
+        
+        StringBuilder sql = new StringBuilder();
+        sql.append("ALTER TYPE ").append(quoteIdentifier(enumName));
+        sql.append(" ADD VALUE '").append(newValue.replace("'", "''")).append("'");
+        
+        if (position != null && !"At end".equals(position) && refValue != null && !refValue.isBlank()) {
+            if ("Before existing value".equals(position)) {
+                sql.append(" BEFORE '").append(refValue.replace("'", "''")).append("'");
+            } else if ("After existing value".equals(position)) {
+                sql.append(" AFTER '").append(refValue.replace("'", "''")).append("'");
+            }
+        }
+        
+        try {
+            jdbcTemplate.execute(sql.toString());
+            logService.logOperation(sql.toString());
+        } catch (Exception ex) {
+            logService.logError(sql.toString(), ex.getMessage());
+            throw new RuntimeException("Failed to add enum value: " + ex.getMessage(), ex);
+        }
+    }
+
+    // ========== ADVANCED QUERY WITH SUBQUERIES ==========
+
+    public List<Map<String, Object>> fetchDataWithSubqueries(String tableName,
+                                                              List<String> selectColumns,
+                                                              List<String> computedColumns,
+                                                              List<DataFilter> filters,
+                                                              List<String> subqueryFilters,
+                                                              List<String> orderByColumns,
+                                                              List<String> orderDirections,
+                                                              List<String> groupByColumns,
+                                                              List<String> aggregates,
+                                                              String havingClause) {
+        validateIdentifier(tableName, "table");
+        
+        // Build SELECT clause
+        StringBuilder sql = new StringBuilder("SELECT ");
+        List<String> selectParts = new ArrayList<>();
+        
+        if (selectColumns == null || selectColumns.isEmpty()) {
+            selectParts.add("*");
+        } else {
+            for (String col : selectColumns) {
+                if (col.contains("(") || col.contains(" AS ")) {
+                    selectParts.add(col);
+                } else {
+                    selectParts.add(quoteIdentifier(col));
+                }
+            }
+        }
+        
+        // Add computed columns (CASE expressions)
+        if (computedColumns != null) {
+            selectParts.addAll(computedColumns);
+        }
+        
+        // Add aggregates if present
+        if (aggregates != null && !aggregates.isEmpty()) {
+            selectParts.addAll(aggregates);
+        }
+        
+        sql.append(String.join(", ", selectParts));
+        sql.append(" FROM ").append(quoteIdentifier(tableName));
+        
+        // Build WHERE clause
+        MapSqlParameterSource params = new MapSqlParameterSource();
+        List<String> whereClauses = new ArrayList<>();
+        
+        List<DataFilter> activeFilters = filters == null ? List.of() : filters;
+        for (int i = 0; i < activeFilters.size(); i++) {
+            DataFilter filter = activeFilters.get(i);
+            String clause = buildFilterClause(filter, i, params);
+            if (clause != null) {
+                whereClauses.add(clause);
+            }
+        }
+        
+        // Add subquery filters
+        if (subqueryFilters != null) {
+            whereClauses.addAll(subqueryFilters);
+        }
+        
+        if (!whereClauses.isEmpty()) {
+            sql.append(" WHERE ").append(String.join(" AND ", whereClauses));
+        }
+        
+        // Build GROUP BY clause
+        if (groupByColumns != null && !groupByColumns.isEmpty()) {
+            sql.append(" GROUP BY ");
+            List<String> quoted = groupByColumns.stream().map(this::quoteIdentifier).toList();
+            sql.append(String.join(", ", quoted));
+        }
+        
+        // Build HAVING clause
+        if (havingClause != null && !havingClause.isBlank()) {
+            sql.append(" HAVING ").append(havingClause);
+        }
+        
+        // Build ORDER BY clause
+        if (orderByColumns != null && !orderByColumns.isEmpty()) {
+            sql.append(" ORDER BY ");
+            List<String> orderClauses = new ArrayList<>();
+            for (int i = 0; i < orderByColumns.size(); i++) {
+                String column = quoteIdentifier(orderByColumns.get(i));
+                String direction = (orderDirections != null && i < orderDirections.size()) 
+                    ? orderDirections.get(i) : "ASC";
+                orderClauses.add(column + " " + direction);
+            }
+            sql.append(String.join(", ", orderClauses));
+        }
+        
+        String logMessage = sql + (!params.getValues().isEmpty() ? " :: " + params.getValues() : "");
+        logService.logOperation(logMessage);
+        
+        try {
+            return namedTemplate.queryForList(sql.toString(), params);
+        } catch (Exception ex) {
+            logService.logError(sql.toString(), ex.getMessage());
+            throw ex;
         }
     }
 }

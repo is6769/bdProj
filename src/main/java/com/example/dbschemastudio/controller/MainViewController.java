@@ -31,7 +31,10 @@ public class MainViewController {
     private static final List<String> OPERATORS = List.of(
         "=", "!=", ">", "<", ">=", "<=",
         "LIKE", "ILIKE", "NOT LIKE", "NOT ILIKE",
-        "~ (regex)", "~* (regex ci)", "!~ (not regex)", "!~* (not regex ci)"
+        "~ (regex)", "~* (regex ci)", "!~ (not regex)", "!~* (not regex ci)",
+        "SIMILAR TO", "NOT SIMILAR TO",
+        "IS NULL", "IS NOT NULL",
+        "ANY (subquery)", "ALL (subquery)", "EXISTS (subquery)"
     );
     private static final List<String> COMMON_TYPES = List.of(
         "SERIAL", "BIGSERIAL", "INTEGER", "BIGINT", "SMALLINT",
@@ -179,6 +182,18 @@ public class MainViewController {
     private TextField joinLimitField;
     @FXML
     private TableView<Map<String, Object>> joinResultsTableView;
+
+    // User-defined types controls
+    @FXML
+    private TextField compositeTypeNameField;
+    @FXML
+    private VBox compositeFieldsContainer;
+    @FXML
+    private ListView<String> compositeTypeListView;
+
+    // Computed columns/expressions
+    private final List<ComputedColumn> computedColumns = new ArrayList<>();
+    private final List<SubqueryFilter> subqueryFilters = new ArrayList<>();
 
     private final ObservableList<String> tables = FXCollections.observableArrayList();
     private final ObservableList<String> enums = FXCollections.observableArrayList();
@@ -483,7 +498,10 @@ public class MainViewController {
         boolean hasSort = !sortRows.isEmpty();
         boolean hasGroup = enableGroupByCheckbox != null && enableGroupByCheckbox.isSelected();
         boolean hasAggregates = !aggregateFunctions.isEmpty();
-        boolean useAdvanced = hasSort || hasGroup || hasAggregates || selectedColumns != null;
+        boolean hasSubqueryFilters = !subqueryFilters.isEmpty();
+        boolean hasComputedColumns = !computedColumns.isEmpty();
+        boolean useAdvanced = hasSort || hasGroup || hasAggregates || selectedColumns != null 
+                              || hasSubqueryFilters || hasComputedColumns;
         
         if (!useAdvanced) {
             // Use simple query
@@ -492,16 +510,22 @@ public class MainViewController {
                 setStatus("Loaded " + data.size() + " row(s)");
             });
         } else {
-            // Use advanced query
+            // Use advanced query with subqueries and computed columns
             List<String> selectCols = (selectAllColumnsCheckbox != null && selectAllColumnsCheckbox.isSelected()) 
                 ? null : selectedColumns;
-
-            // if
             
             List<String> orderCols = sortRows.stream().map(row -> row.column).toList();
             List<String> orderDirs = sortRows.stream().map(row -> row.direction).toList();
             
             List<String> aggList = aggregateFunctions.stream().map(AggregateFunction::toSQL).toList();
+            
+            // Build computed columns SQL (CASE expressions)
+            List<String> computedColsSQL = computedColumns.stream().map(ComputedColumn::toSQL).toList();
+            
+            // Build subquery filter SQL
+            List<String> subqueryFilterSQL = subqueryFilters.stream()
+                .map(f -> f.toSQL(table))
+                .toList();
             
             String having = (havingConditionField != null && havingConditionField.getText() != null) 
                 ? havingConditionField.getText().trim() : "";
@@ -513,11 +537,13 @@ public class MainViewController {
             List<String> finalOrderCols = orderCols;
             List<String> finalOrderDirs = orderDirs;
             List<String> finalAggList = aggList;
+            List<String> finalComputedCols = computedColsSQL;
+            List<String> finalSubqueryFilters = subqueryFilterSQL;
             String finalHaving = having;
             
             runAsyncWithErrors("Fetching data", 
-                () -> databaseService.fetchDataAdvanced(table, finalSelectCols, filters, 
-                    finalOrderCols, finalOrderDirs, groupByColumns, finalAggList, finalHaving), 
+                () -> databaseService.fetchDataWithSubqueries(table, finalSelectCols, finalComputedCols, filters, 
+                    finalSubqueryFilters, finalOrderCols, finalOrderDirs, groupByColumns, finalAggList, finalHaving), 
                 data -> {
                     populateTable(data);
                     setStatus("Loaded " + data.size() + " row(s)");
@@ -618,14 +644,14 @@ public class MainViewController {
             String value = row.valueField.getText();
             boolean hasColumn = column != null && !column.isBlank();
             boolean hasValue = value != null && !value.isBlank();
-            if (!hasColumn && !hasValue) {
+            
+            // Skip completely empty rows
+            if (!hasColumn && !hasValue && (operator == null || operator.isBlank())) {
                 continue;
             }
+            
             if (!hasColumn) {
-                throw new IllegalArgumentException("Select a column for each filter with a value.");
-            }
-            if (!hasValue) {
-                throw new IllegalArgumentException("Provide a value for filter on column '" + column + "'.");
+                throw new IllegalArgumentException("Select a column for each filter.");
             }
             
             // Clean operator - remove descriptions in parentheses
@@ -634,7 +660,24 @@ public class MainViewController {
                 cleanOperator = operator.substring(0, operator.indexOf("(")).trim();
             }
             
-            filters.add(new DataFilter(column, cleanOperator, value));
+            // IS NULL and IS NOT NULL don't require a value
+            boolean isNullOperator = "IS NULL".equals(cleanOperator) || "IS NOT NULL".equals(cleanOperator);
+            
+            // Skip subquery operators in regular filters (they're handled separately)
+            boolean isSubqueryOperator = cleanOperator != null && 
+                (cleanOperator.startsWith("ANY") || cleanOperator.startsWith("ALL") || cleanOperator.startsWith("EXISTS"));
+            if (isSubqueryOperator) {
+                continue;
+            }
+            
+            if (!isNullOperator && !hasValue) {
+                throw new IllegalArgumentException("Provide a value for filter on column '" + column + "'.");
+            }
+            
+            // For IS NULL/IS NOT NULL, use empty value
+            String filterValue = isNullOperator ? "" : value;
+            
+            filters.add(new DataFilter(column, cleanOperator, filterValue));
         }
         return filters;
     }
@@ -856,6 +899,8 @@ public class MainViewController {
         });
     }
 
+    /** Parse column definitions from text. Useful for parsing CREATE TABLE text input. */
+    @SuppressWarnings("unused")
     private List<ColumnDefinition> parseColumnDefinitions(String text) {
         String[] lines = text.split("\r?\n");
         List<ColumnDefinition> definitions = new ArrayList<>();
@@ -1238,6 +1283,14 @@ public class MainViewController {
         if (havingConditionField != null) {
             havingConditionField.clear();
         }
+        
+        // Reset subquery filters
+        subqueryFilters.clear();
+        
+        // Reset computed columns (CASE expressions)
+        computedColumns.clear();
+        
+        setStatus("Query builder reset");
     }
 
     @FXML
@@ -1295,7 +1348,6 @@ public class MainViewController {
         
         Label param1Label = new Label();
         Label param2Label = new Label();
-        Label param3Label = new Label();
         
         // Update parameters based on function
         functionCombo.setOnAction(e -> {
@@ -1448,6 +1500,955 @@ public class MainViewController {
     private String quoteIdent(String identifier) {
         // Simple identifier quoting for PostgreSQL
         return "\"" + identifier + "\"";
+    }
+
+    // ========== SUBQUERY FILTER HANDLERS ==========
+
+    @FXML
+    private void handleShowSubqueryBuilder() {
+        String tableName = dataTableSelector.getValue();
+        if (tableName == null || tableName.isBlank()) {
+            showError("Please select a table first");
+            return;
+        }
+        
+        runAsyncWithErrors("Loading columns", () -> databaseService.describeTable(tableName), columns -> {
+            showSubqueryBuilderDialog(tableName, columns);
+        });
+    }
+
+    private void showSubqueryBuilderDialog(String mainTable, List<ColumnMetadata> mainColumns) {
+        Dialog<SubqueryFilter> dialog = new Dialog<>();
+        dialog.setTitle("Subquery Filter Builder");
+        dialog.setHeaderText("Create a subquery filter (ANY, ALL, EXISTS)");
+        
+        VBox content = new VBox(15);
+        content.setPadding(new Insets(15));
+        
+        // Operator selection
+        Label operatorLabel = new Label("Subquery Operator:");
+        ComboBox<String> operatorCombo = new ComboBox<>();
+        operatorCombo.setItems(FXCollections.observableArrayList("ANY", "ALL", "EXISTS", "NOT EXISTS", "IN"));
+        operatorCombo.setValue("ANY");
+        operatorCombo.setPrefWidth(200);
+        
+        // Main table column (for ANY/ALL)
+        Label mainColumnLabel = new Label("Main Table Column:");
+        ComboBox<String> mainColumnCombo = new ComboBox<>();
+        mainColumnCombo.setItems(FXCollections.observableArrayList(
+            mainColumns.stream().map(ColumnMetadata::name).toList()
+        ));
+        mainColumnCombo.setPrefWidth(200);
+        
+        // Subquery table
+        Label subqueryTableLabel = new Label("Subquery Table:");
+        ComboBox<String> subqueryTableCombo = new ComboBox<>();
+        subqueryTableCombo.setItems(tables);
+        subqueryTableCombo.setPrefWidth(200);
+        
+        // Subquery column
+        Label subqueryColumnLabel = new Label("Subquery Column:");
+        ComboBox<String> subqueryColumnCombo = new ComboBox<>();
+        subqueryColumnCombo.setPrefWidth(200);
+        
+        // Correlated subquery option
+        CheckBox correlatedCheckbox = new CheckBox("Correlated Subquery");
+        Label correlationColumnLabel = new Label("Correlation Column:");
+        ComboBox<String> correlationColumnCombo = new ComboBox<>();
+        correlationColumnCombo.setPrefWidth(200);
+        correlationColumnCombo.setDisable(true);
+        
+        correlatedCheckbox.setOnAction(e -> {
+            correlationColumnCombo.setDisable(!correlatedCheckbox.isSelected());
+        });
+        
+        // Subquery WHERE conditions
+        Label conditionsLabel = new Label("Subquery WHERE Conditions:");
+        VBox conditionsContainer = new VBox(5);
+        List<TextField> conditionFields = new ArrayList<>();
+        
+        Button addConditionButton = new Button("Add Condition");
+        addConditionButton.setOnAction(e -> {
+            TextField condField = new TextField();
+            condField.setPromptText("e.g., status = 'active'");
+            condField.setPrefWidth(300);
+            conditionFields.add(condField);
+            conditionsContainer.getChildren().add(condField);
+        });
+        
+        // Load subquery columns when table is selected
+        subqueryTableCombo.setOnAction(e -> {
+            String subTable = subqueryTableCombo.getValue();
+            if (subTable != null && !subTable.isBlank()) {
+                runAsyncWithErrors("Loading columns", () -> databaseService.describeTable(subTable), cols -> {
+                    List<String> colNames = cols.stream().map(ColumnMetadata::name).toList();
+                    subqueryColumnCombo.setItems(FXCollections.observableArrayList(colNames));
+                    correlationColumnCombo.setItems(FXCollections.observableArrayList(colNames));
+                });
+            }
+        });
+        
+        // Toggle visibility based on operator
+        operatorCombo.setOnAction(e -> {
+            String op = operatorCombo.getValue();
+            boolean isExists = "EXISTS".equals(op) || "NOT EXISTS".equals(op);
+            mainColumnLabel.setVisible(!isExists);
+            mainColumnCombo.setVisible(!isExists);
+            mainColumnLabel.setManaged(!isExists);
+            mainColumnCombo.setManaged(!isExists);
+        });
+        
+        // Preview area
+        TextArea previewArea = new TextArea();
+        previewArea.setEditable(false);
+        previewArea.setPrefRowCount(4);
+        previewArea.setPromptText("SQL preview will appear here...");
+        
+        Button previewButton = new Button("Preview SQL");
+        previewButton.setOnAction(e -> {
+            try {
+                SubqueryFilter filter = buildSubqueryFilter(
+                    mainColumnCombo.getValue(),
+                    operatorCombo.getValue(),
+                    subqueryTableCombo.getValue(),
+                    subqueryColumnCombo.getValue(),
+                    conditionFields.stream().map(TextField::getText).filter(s -> s != null && !s.isBlank()).toList(),
+                    correlatedCheckbox.isSelected(),
+                    correlationColumnCombo.getValue()
+                );
+                previewArea.setText(filter.toSQL(mainTable));
+            } catch (Exception ex) {
+                previewArea.setText("Error: " + ex.getMessage());
+            }
+        });
+        
+        content.getChildren().addAll(
+            operatorLabel, operatorCombo,
+            mainColumnLabel, mainColumnCombo,
+            subqueryTableLabel, subqueryTableCombo,
+            subqueryColumnLabel, subqueryColumnCombo,
+            new Separator(),
+            correlatedCheckbox,
+            correlationColumnLabel, correlationColumnCombo,
+            new Separator(),
+            conditionsLabel,
+            addConditionButton,
+            conditionsContainer,
+            new Separator(),
+            previewButton,
+            new Label("SQL Preview:"),
+            previewArea
+        );
+        
+        ScrollPane scrollPane = new ScrollPane(content);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setPrefHeight(550);
+        scrollPane.setPrefWidth(450);
+        
+        dialog.getDialogPane().setContent(scrollPane);
+        dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+        
+        dialog.setResultConverter(buttonType -> {
+            if (buttonType == ButtonType.OK) {
+                try {
+                    return buildSubqueryFilter(
+                        mainColumnCombo.getValue(),
+                        operatorCombo.getValue(),
+                        subqueryTableCombo.getValue(),
+                        subqueryColumnCombo.getValue(),
+                        conditionFields.stream().map(TextField::getText).filter(s -> s != null && !s.isBlank()).toList(),
+                        correlatedCheckbox.isSelected(),
+                        correlationColumnCombo.getValue()
+                    );
+                } catch (Exception ex) {
+                    showError(ex.getMessage());
+                    return null;
+                }
+            }
+            return null;
+        });
+        
+        dialog.showAndWait().ifPresent(filter -> {
+            subqueryFilters.add(filter);
+            setStatus("Subquery filter added. Execute query to apply.");
+        });
+    }
+
+    private SubqueryFilter buildSubqueryFilter(String mainColumn, String operator, String subqueryTable,
+                                                String subqueryColumn, List<String> conditions,
+                                                boolean isCorrelated, String correlationColumn) {
+        boolean isExists = "EXISTS".equals(operator) || "NOT EXISTS".equals(operator);
+        
+        if (!isExists && (mainColumn == null || mainColumn.isBlank())) {
+            throw new IllegalArgumentException("Main table column is required for " + operator);
+        }
+        if (subqueryTable == null || subqueryTable.isBlank()) {
+            throw new IllegalArgumentException("Subquery table is required");
+        }
+        if (subqueryColumn == null || subqueryColumn.isBlank()) {
+            throw new IllegalArgumentException("Subquery column is required");
+        }
+        
+        return new SubqueryFilter(mainColumn, operator, subqueryTable, subqueryColumn, 
+                                  conditions, isCorrelated, correlationColumn);
+    }
+
+    @FXML
+    private void handleClearSubqueryFilters() {
+        subqueryFilters.clear();
+        setStatus("Subquery filters cleared");
+    }
+
+    // ========== CASE EXPRESSION BUILDER ==========
+
+    @FXML
+    private void handleShowCaseBuilder() {
+        String tableName = dataTableSelector.getValue();
+        if (tableName == null || tableName.isBlank()) {
+            showError("Please select a table first");
+            return;
+        }
+        
+        runAsyncWithErrors("Loading columns", () -> databaseService.describeTable(tableName), columns -> {
+            showCaseBuilderDialog(tableName, columns);
+        });
+    }
+
+    private void showCaseBuilderDialog(String tableName, List<ColumnMetadata> columns) {
+        Dialog<ComputedColumn> dialog = new Dialog<>();
+        dialog.setTitle("CASE Expression Builder");
+        dialog.setHeaderText("Create a computed column with CASE expression");
+        
+        VBox content = new VBox(15);
+        content.setPadding(new Insets(15));
+        
+        // Alias for the computed column
+        Label aliasLabel = new Label("Column Alias:");
+        TextField aliasField = new TextField();
+        aliasField.setPromptText("e.g., status_text");
+        aliasField.setPrefWidth(200);
+        
+        // WHEN-THEN conditions
+        Label whenLabel = new Label("WHEN ... THEN ... conditions:");
+        VBox whenContainer = new VBox(10);
+        List<HBox> whenRows = new ArrayList<>();
+        
+        Runnable addWhenRow = () -> {
+            HBox row = new HBox(10);
+            row.setAlignment(Pos.CENTER_LEFT);
+            
+            ComboBox<String> columnCombo = new ComboBox<>();
+            columnCombo.setItems(FXCollections.observableArrayList(
+                columns.stream().map(ColumnMetadata::name).toList()
+            ));
+            columnCombo.setPromptText("Column");
+            columnCombo.setPrefWidth(120);
+            
+            ComboBox<String> opCombo = new ComboBox<>();
+            opCombo.setItems(FXCollections.observableArrayList("=", "!=", ">", "<", ">=", "<=", "IS NULL", "IS NOT NULL"));
+            opCombo.setValue("=");
+            opCombo.setPrefWidth(80);
+            
+            TextField valueField = new TextField();
+            valueField.setPromptText("Value");
+            valueField.setPrefWidth(100);
+            
+            Label thenLabel = new Label("THEN");
+            
+            TextField resultField = new TextField();
+            resultField.setPromptText("Result");
+            resultField.setPrefWidth(100);
+            
+            Button removeBtn = new Button("X");
+            removeBtn.setOnAction(e -> {
+                whenRows.remove(row);
+                whenContainer.getChildren().remove(row);
+            });
+            
+            row.getChildren().addAll(new Label("WHEN"), columnCombo, opCombo, valueField, thenLabel, resultField, removeBtn);
+            whenRows.add(row);
+            whenContainer.getChildren().add(row);
+        };
+        
+        Button addWhenButton = new Button("Add WHEN clause");
+        addWhenButton.setOnAction(e -> addWhenRow.run());
+        
+        // Add one WHEN row by default
+        addWhenRow.run();
+        
+        // ELSE clause
+        Label elseLabel = new Label("ELSE value (optional):");
+        TextField elseField = new TextField();
+        elseField.setPromptText("e.g., 'Unknown'");
+        elseField.setPrefWidth(200);
+        
+        // Preview
+        TextArea previewArea = new TextArea();
+        previewArea.setEditable(false);
+        previewArea.setPrefRowCount(4);
+        
+        Button previewButton = new Button("Preview SQL");
+        previewButton.setOnAction(e -> {
+            try {
+                List<CaseWhen> caseWhens = buildCaseWhens(whenRows);
+                ComputedColumn cc = new ComputedColumn(aliasField.getText(), caseWhens, elseField.getText());
+                previewArea.setText(cc.toSQL());
+            } catch (Exception ex) {
+                previewArea.setText("Error: " + ex.getMessage());
+            }
+        });
+        
+        content.getChildren().addAll(
+            aliasLabel, aliasField,
+            new Separator(),
+            whenLabel,
+            addWhenButton,
+            whenContainer,
+            new Separator(),
+            elseLabel, elseField,
+            new Separator(),
+            previewButton,
+            new Label("SQL Preview:"),
+            previewArea
+        );
+        
+        ScrollPane scrollPane = new ScrollPane(content);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setPrefHeight(500);
+        scrollPane.setPrefWidth(600);
+        
+        dialog.getDialogPane().setContent(scrollPane);
+        dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+        
+        dialog.setResultConverter(buttonType -> {
+            if (buttonType == ButtonType.OK) {
+                try {
+                    List<CaseWhen> caseWhens = buildCaseWhens(whenRows);
+                    if (caseWhens.isEmpty()) {
+                        throw new IllegalArgumentException("At least one WHEN clause is required");
+                    }
+                    return new ComputedColumn(aliasField.getText(), caseWhens, elseField.getText());
+                } catch (Exception ex) {
+                    showError(ex.getMessage());
+                    return null;
+                }
+            }
+            return null;
+        });
+        
+        dialog.showAndWait().ifPresent(cc -> {
+            computedColumns.add(cc);
+            setStatus("CASE expression added. Execute query to see results.");
+        });
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<CaseWhen> buildCaseWhens(List<HBox> whenRows) {
+        List<CaseWhen> caseWhens = new ArrayList<>();
+        
+        for (HBox row : whenRows) {
+            ComboBox<String> columnCombo = (ComboBox<String>) row.getChildren().get(1);
+            ComboBox<String> opCombo = (ComboBox<String>) row.getChildren().get(2);
+            TextField valueField = (TextField) row.getChildren().get(3);
+            TextField resultField = (TextField) row.getChildren().get(5);
+            
+            String column = columnCombo.getValue();
+            String op = opCombo.getValue();
+            String value = valueField.getText();
+            String result = resultField.getText();
+            
+            if (column == null || column.isBlank()) continue;
+            if (result == null || result.isBlank()) continue;
+            
+            String condition;
+            if ("IS NULL".equals(op) || "IS NOT NULL".equals(op)) {
+                condition = quoteIdent(column) + " " + op;
+            } else {
+                String quotedValue = value.matches("-?\\d+(\\.\\d+)?") ? value : "'" + value.replace("'", "''") + "'";
+                condition = quoteIdent(column) + " " + op + " " + quotedValue;
+            }
+            
+            String quotedResult = result.matches("-?\\d+(\\.\\d+)?") ? result : "'" + result.replace("'", "''") + "'";
+            caseWhens.add(new CaseWhen(condition, quotedResult));
+        }
+        
+        return caseWhens;
+    }
+
+    @FXML
+    private void handleClearCaseExpressions() {
+        computedColumns.clear();
+        setStatus("CASE expressions cleared");
+    }
+
+    // ========== NULL FUNCTIONS (COALESCE, NULLIF) ==========
+
+    @FXML
+    private void handleShowNullFunctions() {
+        String tableName = dataTableSelector.getValue();
+        if (tableName == null || tableName.isBlank()) {
+            showError("Please select a table first");
+            return;
+        }
+        
+        runAsyncWithErrors("Loading columns", () -> databaseService.describeTable(tableName), columns -> {
+            showNullFunctionsDialog(tableName, columns);
+        });
+    }
+
+    private void showNullFunctionsDialog(String tableName, List<ColumnMetadata> columns) {
+        Dialog<Void> dialog = new Dialog<>();
+        dialog.setTitle("NULL Handling Functions");
+        dialog.setHeaderText("Apply COALESCE or NULLIF functions");
+        
+        VBox content = new VBox(15);
+        content.setPadding(new Insets(15));
+        
+        // Function selection
+        Label functionLabel = new Label("Function:");
+        ComboBox<String> functionCombo = new ComboBox<>();
+        functionCombo.setItems(FXCollections.observableArrayList("COALESCE", "NULLIF"));
+        functionCombo.setValue("COALESCE");
+        functionCombo.setPrefWidth(200);
+        
+        // Column selection
+        Label columnLabel = new Label("Column:");
+        ComboBox<String> columnCombo = new ComboBox<>();
+        columnCombo.setItems(FXCollections.observableArrayList(
+            columns.stream().map(ColumnMetadata::name).toList()
+        ));
+        columnCombo.setPrefWidth(200);
+        
+        // Value input
+        Label valueLabel = new Label("Value:");
+        TextField valueField = new TextField();
+        valueField.setPrefWidth(200);
+        
+        // Description updates based on function
+        Label descLabel = new Label();
+        descLabel.setWrapText(true);
+        descLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: gray;");
+        
+        functionCombo.setOnAction(e -> {
+            String func = functionCombo.getValue();
+            if ("COALESCE".equals(func)) {
+                valueField.setPromptText("Default value when NULL");
+                descLabel.setText("COALESCE returns the first non-NULL value. Use this to replace NULL with a default.");
+            } else {
+                valueField.setPromptText("Value to compare");
+                descLabel.setText("NULLIF returns NULL if the column value equals the specified value, otherwise returns the column value.");
+            }
+        });
+        functionCombo.fireEvent(new javafx.event.ActionEvent());
+        
+        // Result preview
+        TextArea resultArea = new TextArea();
+        resultArea.setEditable(false);
+        resultArea.setPrefRowCount(10);
+        
+        Button applyButton = new Button("Apply & Preview");
+        applyButton.setOnAction(e -> {
+            String function = functionCombo.getValue();
+            String column = columnCombo.getValue();
+            String value = valueField.getText();
+            
+            if (column == null || column.isBlank()) {
+                showError("Please select a column");
+                return;
+            }
+            if (value == null || value.isBlank()) {
+                showError("Please enter a value");
+                return;
+            }
+            
+            String quotedValue = value.matches("-?\\d+(\\.\\d+)?") ? value : "'" + value.replace("'", "''") + "'";
+            String funcExpr = function + "(" + quoteIdent(column) + ", " + quotedValue + ")";
+            
+            String sql = "SELECT " + quoteIdent(column) + " AS original, " + funcExpr + " AS result FROM " + 
+                         quoteIdent(tableName) + " LIMIT 20";
+            
+            runAsyncWithErrors("Applying function", 
+                () -> databaseService.executeCustomQuery(sql),
+                results -> {
+                    StringBuilder sb = new StringBuilder();
+                    sb.append("Function: ").append(funcExpr).append("\n\n");
+                    sb.append(String.format("%-30s | %-30s\n", "Original", "Result"));
+                    sb.append("-".repeat(63)).append("\n");
+                    
+                    for (Map<String, Object> row : results) {
+                        Object orig = row.get("original");
+                        Object res = row.get("result");
+                        sb.append(String.format("%-30s | %-30s\n", 
+                            orig != null ? orig.toString() : "NULL",
+                            res != null ? res.toString() : "NULL"));
+                    }
+                    
+                    resultArea.setText(sb.toString());
+                });
+        });
+        
+        content.getChildren().addAll(
+            functionLabel, functionCombo,
+            descLabel,
+            columnLabel, columnCombo,
+            valueLabel, valueField,
+            applyButton,
+            new Separator(),
+            new Label("Preview (first 20 rows):"),
+            resultArea
+        );
+        
+        ScrollPane scrollPane = new ScrollPane(content);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setPrefHeight(500);
+        scrollPane.setPrefWidth(500);
+        
+        dialog.getDialogPane().setContent(scrollPane);
+        dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+        
+        dialog.showAndWait();
+    }
+
+    // ========== SIMILAR TO PATTERN MATCHING ==========
+
+    @FXML
+    private void handleShowSimilarTo() {
+        String tableName = dataTableSelector.getValue();
+        if (tableName == null || tableName.isBlank()) {
+            showError("Please select a table first");
+            return;
+        }
+        
+        runAsyncWithErrors("Loading columns", () -> databaseService.describeTable(tableName), columns -> {
+            showSimilarToDialog(tableName, columns);
+        });
+    }
+
+    private void showSimilarToDialog(String tableName, List<ColumnMetadata> columns) {
+        Dialog<Void> dialog = new Dialog<>();
+        dialog.setTitle("SIMILAR TO Pattern Matching");
+        dialog.setHeaderText("Search strings using SQL regex patterns (SIMILAR TO)");
+        
+        VBox content = new VBox(15);
+        content.setPadding(new Insets(15));
+        
+        // Column selection
+        Label columnLabel = new Label("Column:");
+        ComboBox<String> columnCombo = new ComboBox<>();
+        columnCombo.setItems(FXCollections.observableArrayList(
+            columns.stream().map(ColumnMetadata::name).toList()
+        ));
+        columnCombo.setPrefWidth(250);
+        
+        // Pattern input
+        Label patternLabel = new Label("Pattern:");
+        TextField patternField = new TextField();
+        patternField.setPromptText("e.g., %(abc|def)%");
+        patternField.setPrefWidth(300);
+        
+        // Negation checkbox
+        CheckBox notCheckbox = new CheckBox("NOT SIMILAR TO (negate)");
+        
+        // Pattern help
+        TextArea helpArea = new TextArea();
+        helpArea.setEditable(false);
+        helpArea.setPrefRowCount(8);
+        helpArea.setText("""
+            SIMILAR TO Pattern Syntax:
+            
+            %           - matches any sequence of characters
+            _           - matches any single character
+            |           - alternation (OR)
+            (...)       - grouping
+            [abc]       - character class
+            [a-z]       - character range
+            *           - repeat 0 or more times
+            +           - repeat 1 or more times
+            ?           - repeat 0 or 1 time
+            {n}         - repeat exactly n times
+            
+            Example: '%(cat|dog)%' matches strings containing 'cat' or 'dog'
+            """);
+        helpArea.setStyle("-fx-font-size: 11px;");
+        
+        // Results
+        TableView<Map<String, Object>> resultsTable = new TableView<>();
+        resultsTable.setPrefHeight(200);
+        
+        Button searchButton = new Button("Search");
+        searchButton.setOnAction(e -> {
+            String column = columnCombo.getValue();
+            String pattern = patternField.getText();
+            
+            if (column == null || column.isBlank()) {
+                showError("Please select a column");
+                return;
+            }
+            if (pattern == null || pattern.isBlank()) {
+                showError("Please enter a pattern");
+                return;
+            }
+            
+            String operator = notCheckbox.isSelected() ? "NOT SIMILAR TO" : "SIMILAR TO";
+            String sql = "SELECT * FROM " + quoteIdent(tableName) + 
+                         " WHERE " + quoteIdent(column) + " " + operator + " '" + pattern.replace("'", "''") + "'";
+            
+            runAsyncWithErrors("Searching", 
+                () -> databaseService.executeCustomQuery(sql),
+                results -> {
+                    resultsTable.getColumns().clear();
+                    resultsTable.getItems().clear();
+                    
+                    if (!results.isEmpty()) {
+                        Map<String, Object> firstRow = results.get(0);
+                        for (String key : firstRow.keySet()) {
+                            TableColumn<Map<String, Object>, Object> col = new TableColumn<>(key);
+                            col.setCellValueFactory(param -> new ReadOnlyObjectWrapper<>(param.getValue().get(key)));
+                            col.setPrefWidth(120);
+                            resultsTable.getColumns().add(col);
+                        }
+                        resultsTable.getItems().addAll(results);
+                    }
+                    
+                    setStatus("Found " + results.size() + " matching row(s)");
+                });
+        });
+        
+        content.getChildren().addAll(
+            columnLabel, columnCombo,
+            patternLabel, patternField,
+            notCheckbox,
+            searchButton,
+            new Separator(),
+            new Label("Pattern Syntax Help:"),
+            helpArea,
+            new Separator(),
+            new Label("Results:"),
+            resultsTable
+        );
+        
+        ScrollPane scrollPane = new ScrollPane(content);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setPrefHeight(650);
+        scrollPane.setPrefWidth(600);
+        
+        dialog.getDialogPane().setContent(scrollPane);
+        dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+        
+        dialog.showAndWait();
+    }
+
+    // ========== USER-DEFINED TYPES (COMPOSITE TYPES) ==========
+
+    @FXML
+    private void handleShowCompositeTypes() {
+        showCompositeTypesDialog();
+    }
+
+    private void showCompositeTypesDialog() {
+        Dialog<Void> dialog = new Dialog<>();
+        dialog.setTitle("User-Defined Types");
+        dialog.setHeaderText("Create and manage composite types");
+        
+        TabPane tabPane = new TabPane();
+        
+        // Tab 1: Create Composite Type
+        Tab createTab = new Tab("Create Composite Type");
+        createTab.setClosable(false);
+        
+        VBox createContent = new VBox(15);
+        createContent.setPadding(new Insets(15));
+        
+        Label typeNameLabel = new Label("Type Name:");
+        TextField typeNameField = new TextField();
+        typeNameField.setPromptText("e.g., address_type");
+        typeNameField.setPrefWidth(250);
+        
+        Label fieldsLabel = new Label("Fields (name and type):");
+        VBox fieldsContainer = new VBox(5);
+        List<HBox> fieldRows = new ArrayList<>();
+        
+        Runnable addFieldRow = () -> {
+            HBox row = new HBox(10);
+            row.setAlignment(Pos.CENTER_LEFT);
+            
+            TextField nameField = new TextField();
+            nameField.setPromptText("Field name");
+            nameField.setPrefWidth(150);
+            
+            ComboBox<String> typeCombo = new ComboBox<>();
+            typeCombo.setItems(FXCollections.observableArrayList(availableTypes));
+            typeCombo.setEditable(true);
+            typeCombo.setPromptText("Type");
+            typeCombo.setPrefWidth(150);
+            
+            Button removeBtn = new Button("X");
+            removeBtn.setOnAction(e -> {
+                fieldRows.remove(row);
+                fieldsContainer.getChildren().remove(row);
+            });
+            
+            row.getChildren().addAll(nameField, typeCombo, removeBtn);
+            fieldRows.add(row);
+            fieldsContainer.getChildren().add(row);
+        };
+        
+        Button addFieldButton = new Button("Add Field");
+        addFieldButton.setOnAction(e -> addFieldRow.run());
+        
+        // Add two default fields
+        addFieldRow.run();
+        addFieldRow.run();
+        
+        Button createTypeButton = new Button("Create Composite Type");
+        createTypeButton.setOnAction(e -> {
+            String typeName = typeNameField.getText();
+            if (typeName == null || typeName.isBlank()) {
+                showError("Please enter a type name");
+                return;
+            }
+            
+            List<String> fieldDefs = new ArrayList<>();
+            for (HBox row : fieldRows) {
+                TextField nameField = (TextField) row.getChildren().get(0);
+                @SuppressWarnings("unchecked")
+                ComboBox<String> typeCombo = (ComboBox<String>) row.getChildren().get(1);
+                
+                String fieldName = nameField.getText();
+                String fieldType = typeCombo.getValue();
+                
+                if (fieldName != null && !fieldName.isBlank() && fieldType != null && !fieldType.isBlank()) {
+                    fieldDefs.add(quoteIdent(fieldName) + " " + fieldType);
+                }
+            }
+            
+            if (fieldDefs.isEmpty()) {
+                showError("At least one field is required");
+                return;
+            }
+            
+            runAsyncVoid("Creating composite type",
+                () -> databaseService.createCompositeType(typeName, fieldDefs),
+                () -> {
+                    setStatus("Composite type '" + typeName + "' created successfully");
+                    typeNameField.clear();
+                    handleRefreshEnums(); // Refresh types list
+                });
+        });
+        
+        createContent.getChildren().addAll(
+            typeNameLabel, typeNameField,
+            new Separator(),
+            fieldsLabel,
+            addFieldButton,
+            fieldsContainer,
+            new Separator(),
+            createTypeButton
+        );
+        
+        createTab.setContent(new ScrollPane(createContent));
+        
+        // Tab 2: View/Manage Existing Types
+        Tab viewTab = new Tab("View Types");
+        viewTab.setClosable(false);
+        
+        VBox viewContent = new VBox(15);
+        viewContent.setPadding(new Insets(15));
+        
+        Label enumsLabel = new Label("ENUM Types:");
+        ListView<String> enumsList = new ListView<>();
+        enumsList.setItems(enums);
+        enumsList.setPrefHeight(150);
+        
+        Button viewEnumButton = new Button("View ENUM Values");
+        viewEnumButton.setOnAction(e -> {
+            String selected = enumsList.getSelectionModel().getSelectedItem();
+            if (selected != null) {
+                showEnumValues(selected);
+            }
+        });
+        
+        Button dropEnumButton = new Button("Drop ENUM Type");
+        dropEnumButton.setOnAction(e -> {
+            String selected = enumsList.getSelectionModel().getSelectedItem();
+            if (selected != null) {
+                Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+                confirm.setTitle("Confirm Drop");
+                confirm.setHeaderText("Drop ENUM type '" + selected + "'?");
+                confirm.setContentText("This will fail if the type is in use by any table.");
+                
+                confirm.showAndWait().ifPresent(response -> {
+                    if (response == ButtonType.OK) {
+                        runAsyncVoid("Dropping ENUM type",
+                            () -> databaseService.dropType(selected),
+                            () -> {
+                                setStatus("ENUM type '" + selected + "' dropped");
+                                handleRefreshEnums();
+                            });
+                    }
+                });
+            }
+        });
+        
+        Label compositeLabel = new Label("Composite Types:");
+        ListView<String> compositeList = new ListView<>();
+        compositeList.setPrefHeight(150);
+        
+        Button refreshTypesButton = new Button("Refresh Types");
+        refreshTypesButton.setOnAction(e -> {
+            runAsyncWithErrors("Loading composite types",
+                () -> databaseService.listCompositeTypes(),
+                types -> {
+                    compositeList.setItems(FXCollections.observableArrayList(types));
+                });
+        });
+        
+        Button viewCompositeButton = new Button("View Composite Structure");
+        viewCompositeButton.setOnAction(e -> {
+            String selected = compositeList.getSelectionModel().getSelectedItem();
+            if (selected != null) {
+                runAsyncWithErrors("Loading type structure",
+                    () -> databaseService.getCompositeTypeFields(selected),
+                    fields -> {
+                        Alert info = new Alert(Alert.AlertType.INFORMATION);
+                        info.setTitle("Composite Type Structure");
+                        info.setHeaderText("Fields of type: " + selected);
+                        info.setContentText(String.join("\n", fields));
+                        info.showAndWait();
+                    });
+            }
+        });
+        
+        Button dropCompositeButton = new Button("Drop Composite Type");
+        dropCompositeButton.setOnAction(e -> {
+            String selected = compositeList.getSelectionModel().getSelectedItem();
+            if (selected != null) {
+                Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+                confirm.setTitle("Confirm Drop");
+                confirm.setHeaderText("Drop composite type '" + selected + "'?");
+                
+                confirm.showAndWait().ifPresent(response -> {
+                    if (response == ButtonType.OK) {
+                        runAsyncVoid("Dropping composite type",
+                            () -> databaseService.dropType(selected),
+                            () -> {
+                                setStatus("Composite type '" + selected + "' dropped");
+                                refreshTypesButton.fire();
+                            });
+                    }
+                });
+            }
+        });
+        
+        // Load composite types on open
+        Platform.runLater(() -> refreshTypesButton.fire());
+        
+        viewContent.getChildren().addAll(
+            enumsLabel, enumsList,
+            new HBox(10, viewEnumButton, dropEnumButton),
+            new Separator(),
+            compositeLabel, compositeList,
+            new HBox(10, refreshTypesButton, viewCompositeButton, dropCompositeButton)
+        );
+        
+        viewTab.setContent(new ScrollPane(viewContent));
+        
+        // Tab 3: Add ENUM value
+        Tab addEnumTab = new Tab("Modify ENUM");
+        addEnumTab.setClosable(false);
+        
+        VBox addEnumContent = new VBox(15);
+        addEnumContent.setPadding(new Insets(15));
+        
+        Label selectEnumLabel = new Label("Select ENUM Type:");
+        ComboBox<String> enumCombo = new ComboBox<>();
+        enumCombo.setItems(enums);
+        enumCombo.setPrefWidth(200);
+        
+        Label newValueLabel = new Label("New Value:");
+        TextField newValueField = new TextField();
+        newValueField.setPromptText("e.g., new_status");
+        newValueField.setPrefWidth(200);
+        
+        Label positionLabel = new Label("Position:");
+        ComboBox<String> positionCombo = new ComboBox<>();
+        positionCombo.setItems(FXCollections.observableArrayList("At end", "Before existing value", "After existing value"));
+        positionCombo.setValue("At end");
+        positionCombo.setPrefWidth(200);
+        
+        Label refValueLabel = new Label("Reference Value:");
+        ComboBox<String> refValueCombo = new ComboBox<>();
+        refValueCombo.setPrefWidth(200);
+        refValueCombo.setDisable(true);
+        
+        positionCombo.setOnAction(e -> {
+            String pos = positionCombo.getValue();
+            refValueCombo.setDisable("At end".equals(pos));
+            if (!"At end".equals(pos)) {
+                String selectedEnum = enumCombo.getValue();
+                if (selectedEnum != null) {
+                    runAsyncWithErrors("Loading enum values",
+                        () -> databaseService.getEnumValues(selectedEnum),
+                        values -> refValueCombo.setItems(FXCollections.observableArrayList(values)));
+                }
+            }
+        });
+        
+        enumCombo.setOnAction(e -> {
+            String pos = positionCombo.getValue();
+            if (!"At end".equals(pos)) {
+                String selectedEnum = enumCombo.getValue();
+                if (selectedEnum != null) {
+                    runAsyncWithErrors("Loading enum values",
+                        () -> databaseService.getEnumValues(selectedEnum),
+                        values -> refValueCombo.setItems(FXCollections.observableArrayList(values)));
+                }
+            }
+        });
+        
+        Button addValueButton = new Button("Add Value to ENUM");
+        addValueButton.setOnAction(e -> {
+            String enumName = enumCombo.getValue();
+            String newValue = newValueField.getText();
+            String position = positionCombo.getValue();
+            String refValue = refValueCombo.getValue();
+            
+            if (enumName == null || enumName.isBlank()) {
+                showError("Please select an ENUM type");
+                return;
+            }
+            if (newValue == null || newValue.isBlank()) {
+                showError("Please enter a new value");
+                return;
+            }
+            
+            runAsyncVoid("Adding value to ENUM",
+                () -> databaseService.addEnumValue(enumName, newValue, position, refValue),
+                () -> {
+                    setStatus("Value '" + newValue + "' added to ENUM '" + enumName + "'");
+                    newValueField.clear();
+                });
+        });
+        
+        addEnumContent.getChildren().addAll(
+            selectEnumLabel, enumCombo,
+            newValueLabel, newValueField,
+            positionLabel, positionCombo,
+            refValueLabel, refValueCombo,
+            new Separator(),
+            addValueButton
+        );
+        
+        addEnumTab.setContent(new ScrollPane(addEnumContent));
+        
+        tabPane.getTabs().addAll(createTab, viewTab, addEnumTab);
+        
+        dialog.getDialogPane().setContent(tabPane);
+        dialog.getDialogPane().setPrefWidth(500);
+        dialog.getDialogPane().setPrefHeight(500);
+        dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+        
+        dialog.showAndWait();
     }
 
     // ========== JOIN WIZARD HANDLERS ==========
@@ -1731,7 +2732,7 @@ public class MainViewController {
         
         sql.append(" FROM ").append(quoteIdent(leftTable));
         if (!leftAlias.equals(leftTable)) {
-            sql.append(" AS ").append(leftAlias);
+            sql.append(" AS ").append(quoteIdent(leftAlias));
         }
         
         for (JoinRow row : joinRows) {
@@ -2161,6 +3162,7 @@ public class MainViewController {
         }
     }
 
+    @SuppressWarnings("unused")
     private static class SortRow {
         private final HBox container;
         private final Label columnLabel;
@@ -2219,10 +3221,159 @@ public class MainViewController {
 
         public String toSQL(String leftTableAlias) {
             String rightRef = (rightAlias != null && !rightAlias.isBlank()) ? rightAlias : rightTable;
-            String onClause = leftTableAlias + "." + leftColumn + " = " + rightRef + "." + rightColumn;
-            return joinType + " " + rightTable + 
-                   ((rightAlias != null && !rightAlias.isBlank()) ? " AS " + rightAlias : "") +
+            String quotedLeftAlias = quoteIdentStatic(leftTableAlias);
+            String quotedRightRef = quoteIdentStatic(rightRef);
+            String onClause = quotedLeftAlias + "." + quoteIdentStatic(leftColumn) + 
+                              " = " + quotedRightRef + "." + quoteIdentStatic(rightColumn);
+            return joinType + " " + quoteIdentStatic(rightTable) + 
+                   ((rightAlias != null && !rightAlias.isBlank()) ? " AS " + quoteIdentStatic(rightAlias) : "") +
                    " ON " + onClause;
+        }
+    }
+
+    /** Static version of quoteIdent for use in static inner classes */
+    private static String quoteIdentStatic(String identifier) {
+        if (identifier == null || identifier.isBlank()) {
+            return identifier;
+        }
+        // Don't double-quote if already quoted
+        if (identifier.startsWith("\"") && identifier.endsWith("\"")) {
+            return identifier;
+        }
+        return "\"" + identifier.replace("\"", "\"\"") + "\"";
+    }
+
+    // ========== COMPUTED COLUMN (CASE EXPRESSION) ==========
+    private static class ComputedColumn {
+        private final String alias;
+        private final List<CaseWhen> caseWhens;
+        private final String elseValue;
+
+        private ComputedColumn(String alias, List<CaseWhen> caseWhens, String elseValue) {
+            this.alias = alias;
+            this.caseWhens = caseWhens;
+            this.elseValue = elseValue;
+        }
+
+        public String toSQL() {
+            StringBuilder sql = new StringBuilder("CASE");
+            for (CaseWhen cw : caseWhens) {
+                sql.append(" WHEN ").append(cw.condition).append(" THEN ").append(cw.result);
+            }
+            if (elseValue != null && !elseValue.isBlank()) {
+                sql.append(" ELSE ").append(elseValue);
+            }
+            sql.append(" END");
+            if (alias != null && !alias.isBlank()) {
+                sql.append(" AS ").append(alias);
+            }
+            return sql.toString();
+        }
+    }
+
+    private static class CaseWhen {
+        private final String condition;
+        private final String result;
+
+        private CaseWhen(String condition, String result) {
+            this.condition = condition;
+            this.result = result;
+        }
+    }
+
+    // ========== SUBQUERY FILTER ==========
+    private static class SubqueryFilter {
+        private final String column;
+        private final String operator; // ANY, ALL, EXISTS
+        private final String subqueryTable;
+        private final String subqueryColumn;
+        private final List<String> subqueryConditions;
+        private final boolean isCorrelated;
+        private final String correlationColumn;
+
+        private SubqueryFilter(String column, String operator, String subqueryTable, 
+                               String subqueryColumn, List<String> subqueryConditions,
+                               boolean isCorrelated, String correlationColumn) {
+            this.column = column;
+            this.operator = operator;
+            this.subqueryTable = subqueryTable;
+            this.subqueryColumn = subqueryColumn;
+            this.subqueryConditions = subqueryConditions;
+            this.isCorrelated = isCorrelated;
+            this.correlationColumn = correlationColumn;
+        }
+
+        public String toSQL(String mainTableAlias) {
+            StringBuilder sql = new StringBuilder();
+            StringBuilder subquery = new StringBuilder();
+            subquery.append("SELECT ").append(quoteIdentStatic(subqueryColumn))
+                    .append(" FROM ").append(quoteIdentStatic(subqueryTable));
+            
+            List<String> conditions = new ArrayList<>(subqueryConditions);
+            if (isCorrelated && correlationColumn != null && !correlationColumn.isBlank()) {
+                conditions.add(quoteIdentStatic(subqueryTable) + "." + quoteIdentStatic(correlationColumn) + 
+                               " = " + quoteIdentStatic(mainTableAlias) + "." + quoteIdentStatic(correlationColumn));
+            }
+            
+            if (!conditions.isEmpty()) {
+                subquery.append(" WHERE ").append(String.join(" AND ", conditions));
+            }
+            
+            if ("EXISTS".equals(operator)) {
+                sql.append("EXISTS (").append(subquery).append(")");
+            } else if ("NOT EXISTS".equals(operator)) {
+                sql.append("NOT EXISTS (").append(subquery).append(")");
+            } else if ("ANY".equals(operator)) {
+                sql.append(quoteIdentStatic(column)).append(" = ANY (").append(subquery).append(")");
+            } else if ("ALL".equals(operator)) {
+                sql.append(quoteIdentStatic(column)).append(" = ALL (").append(subquery).append(")");
+            } else {
+                sql.append(quoteIdentStatic(column)).append(" IN (").append(subquery).append(")");
+            }
+            
+            return sql.toString();
+        }
+    }
+
+    // ========== NULL FUNCTION EXPRESSION (for future enhancements) ==========
+    @SuppressWarnings("unused")
+    private static class NullFunction {
+        private final String functionType; // COALESCE or NULLIF
+        private final String column;
+        private final String value;
+        private final String alias;
+
+        private NullFunction(String functionType, String column, String value, String alias) {
+            this.functionType = functionType;
+            this.column = column;
+            this.value = value;
+            this.alias = alias;
+        }
+
+        public String toSQL() {
+            String quotedColumn = quoteIdentStatic(column);
+            String sql;
+            if ("COALESCE".equals(functionType)) {
+                sql = "COALESCE(" + quotedColumn + ", " + value + ")";
+            } else {
+                sql = "NULLIF(" + quotedColumn + ", " + value + ")";
+            }
+            if (alias != null && !alias.isBlank()) {
+                sql += " AS " + quoteIdentStatic(alias);
+            }
+            return sql;
+        }
+    }
+
+    // ========== COMPOSITE TYPE FIELD (for future enhancements) ==========
+    @SuppressWarnings("unused")
+    private static class CompositeTypeField {
+        private final String name;
+        private final String type;
+
+        private CompositeTypeField(String name, String type) {
+            this.name = name;
+            this.type = type;
         }
     }
 }

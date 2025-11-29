@@ -4,26 +4,28 @@
 <?import javafx.scene.layout.*?>
 
 <BorderPane xmlns="http://javafx.com/javafx/8" xmlns:fx="http://javafx.com/fxml/1"
-            fx:controller="com.example.dbschemastudio.controller.MainViewController">
+            fx:controller="com.example.dbschemastudio.controller.MainViewController"
+            styleClass="border-pane">
     <top>
-        <HBox spacing="12" alignment="CENTER_LEFT" BorderPane.alignment="CENTER">
+        <HBox spacing="16" alignment="CENTER_LEFT" BorderPane.alignment="CENTER" styleClass="header-bar">
             <children>
-                <Label text="Connection:" />
-                <Label fx:id="connectionStatusLabel" text="Unknown" />
-                <Label fx:id="connectionDetailsLabel" text="" />
-                <Button text="Refresh" onAction="#handleRefreshConnection" />
-                <Label text="Transaction:" />
-                <Label fx:id="transactionStatusLabel" text="Inactive" />
+                <Label text="🔌 Connection:" style="-fx-font-weight: bold;" />
+                <Label fx:id="connectionStatusLabel" text="Unknown" styleClass="connection-status-disconnected" />
+                <Label fx:id="connectionDetailsLabel" text="" styleClass="text-secondary" />
+                <Button text="↻ Refresh" onAction="#handleRefreshConnection" styleClass="button-small" />
+                <Separator orientation="VERTICAL" />
+                <Label text="📋 Transaction:" style="-fx-font-weight: bold;" />
+                <Label fx:id="transactionStatusLabel" text="Inactive" styleClass="transaction-status-inactive" />
             </children>
             <padding>
-                <Insets top="12" right="12" bottom="12" left="12" />
+                <Insets top="12" right="20" bottom="12" left="20" />
             </padding>
         </HBox>
     </top>
     <center>
         <TabPane fx:id="mainTabPane">
             <tabs>
-                <Tab text="Tables" closable="false">
+                <Tab text="📁 Tables" closable="false">
                     <content>
                         <ScrollPane fitToWidth="true">
                             <content>
@@ -81,20 +83,20 @@
                         </ScrollPane>
                     </content>
                 </Tab>
-                <Tab text="Alter Table" closable="false">
+                <Tab text="✏️ Alter Table" closable="false">
                     <content>
                         <ScrollPane fitToWidth="true">
                             <content>
                                 <VBox spacing="16">
                                     <padding>
-                                        <Insets top="12" right="12" bottom="12" left="12" />
+                                        <Insets top="16" right="16" bottom="16" left="16" />
                                     </padding>
                                     
                                     <!-- Table Selection -->
                                     <HBox spacing="10" alignment="CENTER_LEFT">
-                                        <Label text="Table:" />
+                                        <Label text="📋 Table:" style="-fx-font-weight: bold;" />
                                         <ComboBox fx:id="alterTableSelector" prefWidth="200" onAction="#handleAlterTableSelected" />
-                                        <Button text="Refresh" onAction="#handleRefreshAlterTables" />
+                                        <Button text="↻ Refresh" onAction="#handleRefreshAlterTables" styleClass="button-small" />
                                     </HBox>
                                     
                                     <Separator />
@@ -192,8 +194,8 @@
                                         <Label text="NOT NULL Constraint" styleClass="section-title" />
                                         <HBox spacing="10" alignment="CENTER_LEFT">
                                             <ComboBox fx:id="notNullColumnSelector" promptText="Select column" prefWidth="150" />
-                                            <Button text="SET NOT NULL" onAction="#handleSetNotNull" />
-                                            <Button text="DROP NOT NULL" onAction="#handleDropNotNull" />
+                                            <Button text="✓ SET NOT NULL" onAction="#handleSetNotNull" styleClass="button-success" />
+                                            <Button text="✗ DROP NOT NULL" onAction="#handleDropNotNull" styleClass="button-danger" />
                                         </HBox>
                                     </VBox>
                                 </VBox>
@@ -201,16 +203,16 @@
                         </ScrollPane>
                     </content>
                 </Tab>
-                <Tab text="Data Viewer" closable="false">
+                <Tab text="🔍 Data Viewer" closable="false">
                     <content>
                         <VBox spacing="12">
                             <padding>
-                                <Insets top="12" right="12" bottom="12" left="12" />
+                                <Insets top="16" right="16" bottom="16" left="16" />
                             </padding>
-                            <HBox spacing="10">
-                                <Label text="Table:" />
+                            <HBox spacing="10" alignment="CENTER_LEFT">
+                                <Label text="📋 Table:" style="-fx-font-weight: bold;" />
                                 <ComboBox fx:id="dataTableSelector" prefWidth="200" onAction="#handleDataTableSelected" />
-                                <Button text="Reload" onAction="#handleReloadData" />
+                                <Button text="↻ Reload" onAction="#handleReloadData" styleClass="button-primary" />
                             </HBox>
                             
                             <!-- Column Selection -->
@@ -272,35 +274,53 @@
                             <!-- HAVING clause -->
                             <VBox spacing="6" fx:id="havingSection" visible="false" managed="false">
                                 <HBox spacing="10" alignment="CENTER_LEFT">
-                                    <Label text="HAVING (filter groups):" />
+                                    <Label text="🔎 HAVING (filter groups):" />
                                     <TextField fx:id="havingConditionField" promptText="e.g. COUNT(*) > 5" prefWidth="300" />
                                 </HBox>
                             </VBox>
                             
                             <!-- Execute Button -->
-                            <HBox spacing="10" alignment="CENTER_LEFT">
-                                <Button text="Execute Query" onAction="#handleReloadData" style="-fx-font-weight: bold;" />
-                                <Button text="Reset All" onAction="#handleResetQueryBuilder" />
-                                <Separator orientation="VERTICAL" />
-                                <Button text="String Functions..." onAction="#handleShowStringFunctions" />
+                            <HBox spacing="12" alignment="CENTER_LEFT">
+                                <Button text="▶ Execute Query" onAction="#handleReloadData" styleClass="button-primary" style="-fx-font-size: 14px; -fx-padding: 10 24 10 24;" />
+                                <Button text="↺ Reset All" onAction="#handleResetQueryBuilder" />
+                            </HBox>
+                            
+                            <!-- Advanced Query Tools -->
+                            <Separator />
+                            <Label text="🛠️ Advanced Query Tools" styleClass="section-title" />
+                            <HBox spacing="8" alignment="CENTER_LEFT">
+                                <Button text="🔗 Subquery Filter (ANY/ALL/EXISTS)..." onAction="#handleShowSubqueryBuilder" />
+                                <Button text="✗ Clear" onAction="#handleClearSubqueryFilters" styleClass="button-small" />
+                            </HBox>
+                            <HBox spacing="8" alignment="CENTER_LEFT">
+                                <Button text="🔀 CASE Expression Builder..." onAction="#handleShowCaseBuilder" />
+                                <Button text="✗ Clear" onAction="#handleClearCaseExpressions" styleClass="button-small" />
+                            </HBox>
+                            <HBox spacing="8" alignment="CENTER_LEFT">
+                                <Button text="📝 String Functions..." onAction="#handleShowStringFunctions" />
+                                <Button text="⊘ NULL Functions (COALESCE/NULLIF)..." onAction="#handleShowNullFunctions" />
+                            </HBox>
+                            <HBox spacing="8" alignment="CENTER_LEFT">
+                                <Button text="🔤 SIMILAR TO Pattern Search..." onAction="#handleShowSimilarTo" />
+                                <Button text="🏷️ User-Defined Types..." onAction="#handleShowCompositeTypes" />
                             </HBox>
                             
                             <TableView fx:id="dataTableView" prefHeight="320" VBox.vgrow="ALWAYS" />
                         </VBox>
                     </content>
                 </Tab>
-                <Tab text="JOIN Wizard" closable="false">
+                <Tab text="🔗 JOIN Wizard" closable="false">
                     <content>
                         <VBox spacing="16">
                             <padding>
-                                <Insets top="12" right="12" bottom="12" left="12" />
+                                <Insets top="16" right="16" bottom="16" left="16" />
                             </padding>
                             
                             <!-- Left Table Selection -->
                             <VBox spacing="8">
-                                <Label text="Primary Table" styleClass="section-title" />
+                                <Label text="📋 Primary Table" styleClass="section-title" />
                                 <HBox spacing="10" alignment="CENTER_LEFT">
-                                    <Label text="Table:" />
+                                    <Label text="Table:" style="-fx-font-weight: bold;" />
                                     <ComboBox fx:id="joinLeftTableCombo" prefWidth="200" onAction="#handleJoinLeftTableSelected" />
                                     <Label text="Alias:" />
                                     <TextField fx:id="joinLeftAliasField" promptText="Optional" prefWidth="100" />
@@ -312,9 +332,9 @@
                             <!-- Joins Configuration -->
                             <VBox spacing="8">
                                 <HBox spacing="10" alignment="CENTER_LEFT">
-                                    <Label text="Joins" styleClass="section-title" />
-                                    <Button text="Add JOIN" onAction="#handleAddJoin" />
-                                    <Button text="Clear All" onAction="#handleClearJoins" />
+                                    <Label text="🔗 Joins" styleClass="section-title" />
+                                    <Button text="+ Add JOIN" onAction="#handleAddJoin" styleClass="button-success" />
+                                    <Button text="✗ Clear All" onAction="#handleClearJoins" styleClass="button-danger" />
                                 </HBox>
                                 <VBox fx:id="joinRowsContainer" spacing="10" />
                             </VBox>
@@ -350,9 +370,9 @@
                             <Separator />
                             
                             <!-- Execute -->
-                            <HBox spacing="10" alignment="CENTER_LEFT">
-                                <Button text="Execute JOIN Query" onAction="#handleExecuteJoin" style="-fx-font-weight: bold;" />
-                                <Button text="Show SQL" onAction="#handleShowJoinSQL" />
+                            <HBox spacing="12" alignment="CENTER_LEFT">
+                                <Button text="▶ Execute JOIN Query" onAction="#handleExecuteJoin" styleClass="button-primary" style="-fx-font-size: 14px; -fx-padding: 10 24 10 24;" />
+                                <Button text="👁 Show SQL" onAction="#handleShowJoinSQL" />
                             </HBox>
                             
                             <!-- Results -->
@@ -360,24 +380,27 @@
                         </VBox>
                     </content>
                 </Tab>
-                <Tab text="Insert Data" closable="false">
+                <Tab text="➕ Insert Data" closable="false">
                     <content>
                         <VBox spacing="12">
                             <padding>
-                                <Insets top="12" right="12" bottom="12" left="12" />
+                                <Insets top="16" right="16" bottom="16" left="16" />
                             </padding>
-                            <HBox spacing="10">
-                                <Label text="Table:" />
-                                <ComboBox fx:id="insertTableSelector" prefWidth="200" onAction="#handleInsertTableSelected" />
-                                <Button text="Reset Fields" onAction="#handleResetInsertForm" />
-                            </HBox>
-                            <GridPane fx:id="insertFormGrid" hgap="10" vgap="10" />
                             <HBox spacing="10" alignment="CENTER_LEFT">
-                                <CheckBox fx:id="useTransactionCheckBox" text="Use Transaction" />
-                                <Button fx:id="beginTransactionButton" text="Begin" onAction="#handleBeginTransaction" />
-                                <Button fx:id="commitTransactionButton" text="Commit" onAction="#handleCommitTransaction" />
-                                <Button fx:id="rollbackTransactionButton" text="Rollback" onAction="#handleRollbackTransaction" />
-                                <Button fx:id="insertRowButton" text="Insert Row" onAction="#handleInsertRow" />
+                                <Label text="📋 Table:" style="-fx-font-weight: bold;" />
+                                <ComboBox fx:id="insertTableSelector" prefWidth="200" onAction="#handleInsertTableSelected" />
+                                <Button text="↺ Reset Fields" onAction="#handleResetInsertForm" />
+                            </HBox>
+                            <GridPane fx:id="insertFormGrid" hgap="12" vgap="12" />
+                            <Separator />
+                            <HBox spacing="10" alignment="CENTER_LEFT">
+                                <CheckBox fx:id="useTransactionCheckBox" text="🔒 Use Transaction" />
+                                <Separator orientation="VERTICAL" />
+                                <Button fx:id="beginTransactionButton" text="▶ Begin" onAction="#handleBeginTransaction" />
+                                <Button fx:id="commitTransactionButton" text="✓ Commit" onAction="#handleCommitTransaction" styleClass="button-success" />
+                                <Button fx:id="rollbackTransactionButton" text="↩ Rollback" onAction="#handleRollbackTransaction" styleClass="button-danger" />
+                                <Separator orientation="VERTICAL" />
+                                <Button fx:id="insertRowButton" text="➕ Insert Row" onAction="#handleInsertRow" styleClass="button-primary" />
                             </HBox>
                         </VBox>
                     </content>
@@ -386,21 +409,21 @@
         </TabPane>
     </center>
     <right>
-        <VBox spacing="8" prefWidth="260">
+        <VBox spacing="8" prefWidth="280" styleClass="sidebar-right">
             <padding>
-                <Insets top="12" right="12" bottom="12" left="12" />
+                <Insets top="16" right="12" bottom="16" left="12" />
             </padding>
-            <Label text="SQL Log" styleClass="section-title" />
-            <ListView fx:id="sqlLogListView" VBox.vgrow="ALWAYS" styleClass="list-view sql-log-view" />
+            <Label text="📜 SQL Log" styleClass="section-title" />
+            <ListView fx:id="sqlLogListView" VBox.vgrow="ALWAYS" styleClass="sql-log-view" />
         </VBox>
     </right>
     <bottom>
-        <HBox spacing="10" alignment="CENTER_LEFT">
+        <HBox spacing="10" alignment="CENTER_LEFT" styleClass="status-bar">
             <padding>
-                <Insets top="12" right="12" bottom="12" left="12" />
+                <Insets top="10" right="20" bottom="10" left="20" />
             </padding>
-            <Label text="Status:" />
-            <Label fx:id="statusLabel" text="Ready" />
+            <Label text="⚡ Status:" style="-fx-font-weight: bold;" />
+            <Label fx:id="statusLabel" text="Ready" styleClass="text-secondary" />
         </HBox>
     </bottom>
 </BorderPane>
